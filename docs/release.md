@@ -7,7 +7,7 @@ Releases are SemVer Git tags on `main`.
 Stable Homebrew install:
 
 ```bash
-brew install flexdinesh/tap/ssh-drop
+brew install --cask flexdinesh/tap/ssh-drop
 ```
 
 Alternative stable install with Go:
@@ -60,11 +60,11 @@ the GitHub Release in this repository.
 
 ## Homebrew
 
-The Homebrew formula installs prebuilt release archives instead of building from
+The Homebrew cask installs prebuilt release archives instead of building from
 source. It declares `rsync` as a runtime dependency because `ssh-drop` requires
 `rsync` to transfer files.
 
-The formula does not install Linux clipboard tools. Clipboard copy is optional
+The cask does not install Linux clipboard tools. Clipboard copy is optional
 after a successful upload; Linux users can install `wl-clipboard` or `xclip` if
 they want automatic clipboard copy.
 
@@ -79,7 +79,7 @@ request.
 3. Confirm the workflow created or reused the expected `v0.1.x` tag.
 4. Review the generated GitHub Release artifacts and checksums.
 5. Merge the generated `flexdinesh/homebrew-tap` pull request after tap CI passes.
-6. Verify with `brew install flexdinesh/tap/ssh-drop` and `ssh-drop --version`.
+6. Verify with `brew install --cask flexdinesh/tap/ssh-drop` and `ssh-drop --version`.
 
 ## Verify Locally
 
@@ -89,10 +89,9 @@ go build ./cmd/ssh-drop
 goreleaser release --snapshot --clean
 ```
 
-The workflows pin GoReleaser `v2.9.0` because GoReleaser deprecated formula
-publishing through `brews` in later versions. The snapshot command remains useful
-locally with newer GoReleaser versions because it verifies archive and formula
-generation without publishing.
+The workflows pin GoReleaser `v2.16.0` so releases can publish Homebrew casks
+through `homebrew_casks`. The snapshot command remains useful locally because it
+verifies archive and cask generation without publishing.
 
 ## Switching Minor Versions
 

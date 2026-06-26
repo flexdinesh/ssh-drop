@@ -65,7 +65,7 @@ changelog:
       - '^Merge pull request'
       - '^Merge branch'
 
-brews:
+homebrew_casks:
   - name: ssh-drop
     repository:
       owner: flexdinesh
@@ -82,10 +82,12 @@ brews:
       name: github-actions[bot]
       email: 41898282+github-actions[bot]@users.noreply.github.com
     commit_msg_template: "Update ssh-drop to {{ .Tag }}"
-    directory: Formula
+    directory: Casks
     homepage: https://github.com/flexdinesh/ssh-drop
     description: Interactive CLI for dropping local files onto SSH remotes with rsync
+    binaries:
+      - ssh-drop
     dependencies:
-      - rsync
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/ssh-drop --version")
+      - formula: rsync
+    caveats: |
+      Run `ssh-drop --help` to view available command-line options.

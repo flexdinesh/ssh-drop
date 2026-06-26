@@ -50,6 +50,7 @@ func TestGoReleaserPackagesSnapshotsForSupportedPlatforms(t *testing.T) {
 	for _, want := range []string{
 		"go test ./...",
 		"go build ./cmd/ssh-drop",
+		"version: v2.16.0",
 		"args: release --snapshot --clean",
 	} {
 		if !strings.Contains(ci, want) {
@@ -72,6 +73,7 @@ func TestStableReleaseWorkflowPublishesSemverTags(t *testing.T) {
 		"next=\"v0.1.0\"",
 		"git push origin",
 		"steps.tag.outputs.create",
+		"version: v2.16.0",
 		"args: release --clean",
 	} {
 		if !strings.Contains(workflow, want) {
@@ -85,7 +87,7 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 	for _, want := range []string{
 		"release:",
 		"replace_existing_artifacts: true",
-		"brews:",
+		"homebrew_casks:",
 		"name: ssh-drop",
 		"owner: flexdinesh",
 		"name: homebrew-tap",
@@ -93,18 +95,32 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 		"branch: \"ssh-drop-{{ .Tag }}\"",
 		"pull_request:",
 		"enabled: true",
+		"directory: Casks",
+		"homepage: https://github.com/flexdinesh/ssh-drop",
+		"binaries:",
+		"- ssh-drop",
 		"dependencies:",
-		"- rsync",
-		"assert_match version.to_s, shell_output(\"#{bin}/ssh-drop --version\")",
+		"- formula: rsync",
+		"caveats:",
+		"Run `ssh-drop --help` to view available command-line options.",
 	} {
 		if !strings.Contains(config, want) {
 			t.Fatalf(".goreleaser.yaml should contain %q", want)
 		}
 	}
 
+	for _, deprecated := range []string{
+		"brews:",
+		"directory: Formula",
+	} {
+		if strings.Contains(config, deprecated) {
+			t.Fatalf(".goreleaser.yaml should not contain deprecated formula config %q", deprecated)
+		}
+	}
+
 	workflow := readFile(t, ".github/workflows/release.yml")
 	for _, want := range []string{
-		"version: v2.9.0",
+		"version: v2.16.0",
 		"HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
 	} {
 		if !strings.Contains(workflow, want) {
@@ -116,7 +132,7 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 func TestReleaseDocsExplainHomebrewChannel(t *testing.T) {
 	readme := readFile(t, "README.md")
 	for _, want := range []string{
-		"brew install flexdinesh/tap/ssh-drop",
+		"brew install --cask flexdinesh/tap/ssh-drop",
 		"go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@latest",
 		"wl-clipboard",
 		"xclip",
@@ -130,7 +146,7 @@ func TestReleaseDocsExplainHomebrewChannel(t *testing.T) {
 	for _, want := range []string{
 		"HOMEBREW_TAP_TOKEN",
 		"v0.1.0",
-		"brew install flexdinesh/tap/ssh-drop",
+		"brew install --cask flexdinesh/tap/ssh-drop",
 		"goreleaser release --snapshot --clean",
 		"Do not create a moving `latest` tag",
 	} {

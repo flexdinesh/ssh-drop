@@ -11,7 +11,7 @@ ssh drop is an interactive CLI that transfers local files to remote machines ove
 The stable install path is Homebrew:
 
 ```bash
-brew install flexdinesh/tap/ssh-drop
+brew install --cask flexdinesh/tap/ssh-drop
 ```
 
 Go install is also supported if you already have [Go](https://go.dev) installed.
@@ -26,7 +26,7 @@ go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@latest
 go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@v0.1.0
 ```
 
-`ssh-drop` also requires `rsync` in your `PATH` for transfers. The Homebrew formula installs `rsync`.
+`ssh-drop` also requires `rsync` in your `PATH` for transfers. The Homebrew cask installs `rsync`.
 
 Clipboard copy uses the first available backend from `pbcopy`, `wl-copy`, or `xclip`. macOS includes `pbcopy`; Linux users can install `wl-clipboard` or `xclip` if they want automatic clipboard copy after upload.
 
