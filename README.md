@@ -2,6 +2,10 @@
 
 ssh drop is an interactive CLI that transfers local files to remote machines over SSH using rsync. It was purpose-built to drag and drop screenshots into terminal windows for AI harnesses running in remote SSH sessions.
 
+## Demo
+
+<https://github.com/user-attachments/assets/72682caf-93e7-4f19-a383-e87accedabbb>
+
 ## Install
 
 The stable install path is Homebrew:
