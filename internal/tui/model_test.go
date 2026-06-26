@@ -247,6 +247,56 @@ func TestDropScreenShowsIdleStatus(t *testing.T) {
 	}
 }
 
+func TestDropInputEscapeClearsPath(t *testing.T) {
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
+	}, tui.Services{})
+
+	for _, r := range "screenshot.png" {
+		model = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if !viewContains(model.View(), "screenshot.png") {
+		t.Fatalf("drop input should show typed path:\n%s", model.View())
+	}
+
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if model.State() != tui.StateDrop {
+		t.Fatalf("expected drop state after escape, got %s", model.State())
+	}
+	if viewContains(model.View(), "screenshot.png") {
+		t.Fatalf("drop input should be cleared after escape:\n%s", model.View())
+	}
+}
+
+func TestDropInputEscapeKeepsStatus(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.png")
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
+	}, tui.Services{})
+
+	model = submitPath(t, model, missing)
+	if !viewContains(model.View(), "does not exist") {
+		t.Fatalf("expected missing path validation before escape:\n%s", model.View())
+	}
+
+	model = update(t, model, tea.KeyMsg{Type: tea.KeyEsc})
+
+	if !viewContains(model.View(), "does not exist") {
+		t.Fatalf("escape should keep validation status:\n%s", model.View())
+	}
+}
+
+func TestDropFooterShowsEscapeClearShortcut(t *testing.T) {
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
+	}, tui.Services{})
+
+	if !viewContains(model.View(), "esc clear") {
+		t.Fatalf("drop footer should show escape clear shortcut:\n%s", model.View())
+	}
+}
+
 func TestUploadScreenShowsSyncingStatus(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "report.txt")

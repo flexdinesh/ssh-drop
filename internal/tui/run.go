@@ -287,6 +287,9 @@ func (m Model) updateDrop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
+	case tea.KeyEsc:
+		m.input.SetValue("")
+		return m, nil
 	case tea.KeyRunes:
 		switch string(msg.Runes) {
 		case "q":
@@ -579,7 +582,7 @@ func (m Model) renderFooter() string {
 	if m.state == StateUpload {
 		return mutedStyle.Render("esc cancel · q quit · ctrl+c quit")
 	}
-	return mutedStyle.Render("enter upload · r remote · q quit · ctrl+c quit")
+	return mutedStyle.Render("enter upload · esc clear · r remote · q quit · ctrl+c quit")
 }
 
 func (m Model) renderInput() string {
