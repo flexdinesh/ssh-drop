@@ -141,6 +141,102 @@ func TestDropInputAcceptsOneRegularFileAndComputesDestination(t *testing.T) {
 	}
 }
 
+func TestPasswordRemotePromptsBeforeUpload(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transfer := &fakeTransfer{}
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{
+			Name:        "files",
+			Host:        "files.example.com",
+			User:        "deploy",
+			Destination: "/uploads",
+		}}},
+	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
+
+	model = submitPath(t, model, file)
+
+	if model.State() != tui.StatePassword {
+		t.Fatalf("expected password prompt state, got %s:\n%s", model.State(), model.View())
+	}
+	if transfer.Events != nil {
+		t.Fatal("transfer should not start before password is submitted")
+	}
+	for _, want := range []string{"SSH password for deploy@files.example.com", "enter upload", "esc cancel"} {
+		if !viewContains(model.View(), want) {
+			t.Fatalf("password prompt should show %q:\n%s", want, model.View())
+		}
+	}
+}
+
+func TestSubmittingPasswordStartsUploadWithoutRenderingSecret(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transfer := &fakeTransfer{}
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{
+			Name:        "files",
+			Host:        "files.example.com",
+			User:        "deploy",
+			Destination: "/uploads",
+		}}},
+	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
+
+	model = submitPath(t, model, file)
+	for _, r := range "secret-pass" {
+		model = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if strings.Contains(model.View(), "secret-pass") {
+		t.Fatalf("password prompt rendered the secret:\n%s", model.View())
+	}
+	model = update(t, model, key("enter"))
+
+	if model.State() != tui.StateUpload {
+		t.Fatalf("expected upload state, got %s:\n%s", model.State(), model.View())
+	}
+	if transfer.Request.Password != "secret-pass" {
+		t.Fatalf("expected transfer password to be set, got %q", transfer.Request.Password)
+	}
+	if strings.Contains(model.View(), "secret-pass") {
+		t.Fatalf("upload view rendered the secret:\n%s", model.View())
+	}
+}
+
+func TestPasswordPromptKeepsSameHeightAfterTyping(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{
+			Name:        "files",
+			Host:        "files.example.com",
+			User:        "deploy",
+			Destination: "/uploads",
+		}}},
+	}, tui.Services{Transferer: &fakeTransfer{}, Clipboard: &fakeClipboard{}})
+
+	model = submitPath(t, model, file)
+	emptyView := model.View()
+	emptyHeight := visibleLineCount(emptyView)
+	for _, r := range "secret-pass" {
+		model = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	filledView := model.View()
+	filledHeight := visibleLineCount(filledView)
+
+	if filledHeight != emptyHeight {
+		t.Fatalf("password prompt height changed after typing: empty %d, filled %d\nempty:\n%s\nfilled:\n%s", emptyHeight, filledHeight, emptyView, filledView)
+	}
+}
+
 func TestDropScreenShowsIdleStatus(t *testing.T) {
 	model := tui.NewModel(session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
@@ -386,6 +482,16 @@ func widestLine(view string) int {
 		widest = max(widest, lipgloss.Width(line))
 	}
 	return widest
+}
+
+func visibleLineCount(view string) int {
+	count := 0
+	for _, line := range strings.Split(view, "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func lineIndexContaining(view string, needle string) int {

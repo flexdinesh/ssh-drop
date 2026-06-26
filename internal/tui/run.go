@@ -23,6 +23,7 @@ type State int
 const (
 	StateRemotePicker State = iota
 	StateDrop
+	StatePassword
 	StateUpload
 	StateConfirmQuit
 )
@@ -33,6 +34,8 @@ func (s State) String() string {
 		return "remote-picker"
 	case StateDrop:
 		return "drop"
+	case StatePassword:
+		return "password"
 	case StateUpload:
 		return "upload"
 	case StateConfirmQuit:
@@ -77,6 +80,8 @@ type Model struct {
 	cursor          int
 	selected        int
 	input           textinput.Model
+	passwordInput   textinput.Model
+	passwordError   string
 	status          string
 	statusKind      statusKind
 	lastDestination string
@@ -89,6 +94,7 @@ type Model struct {
 	quitting        bool
 	quitAfterCancel bool
 	width           int
+	height          int
 }
 
 var (
@@ -121,14 +127,22 @@ func NewModel(start session.Start, services Services) Model {
 	input.Focus()
 	input.CharLimit = 4096
 	input.Width = 68
+	passwordInput := textinput.New()
+	passwordInput.EchoMode = textinput.EchoPassword
+	passwordInput.EchoCharacter = '*'
+	passwordInput.CharLimit = 1024
+	passwordInput.Width = 28
+	passwordInput.Focus()
 
 	model := Model{
-		start:    start,
-		state:    StateRemotePicker,
-		selected: -1,
-		input:    input,
-		services: services,
-		width:    80,
+		start:         start,
+		state:         StateRemotePicker,
+		selected:      -1,
+		input:         input,
+		passwordInput: passwordInput,
+		services:      services,
+		width:         80,
+		height:        24,
 	}
 	model.input.Width = model.inputTextWidth()
 	if start.PreselectedRemote != "" {
@@ -167,7 +181,7 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.setWidth(msg.Width)
+		m.setSize(msg.Width, msg.Height)
 		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch m.state {
@@ -175,6 +189,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updatePicker(msg)
 		case StateDrop:
 			return m.updateDrop(msg)
+		case StatePassword:
+			return m.updatePassword(msg)
 		case StateUpload:
 			return m.updateUpload(msg)
 		case StateConfirmQuit:
@@ -206,6 +222,8 @@ func (m Model) View() string {
 		b.WriteString(mutedStyle.Render("enter select · q quit"))
 	case StateDrop:
 		b.WriteString(m.renderDropView())
+	case StatePassword:
+		b.WriteString(m.renderPasswordView())
 	case StateUpload, StateConfirmQuit:
 		b.WriteString(m.renderDropView())
 	}
@@ -289,6 +307,32 @@ func (m Model) updateDrop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	return m, cmd
+}
+
+func (m Model) updatePassword(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.currentRequest = session.TransferRequest{}
+		m.passwordInput.SetValue("")
+		m.passwordError = ""
+		m.state = StateDrop
+		return m, nil
+	case tea.KeyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case tea.KeyEnter:
+		if m.passwordInput.Value() == "" {
+			m.passwordError = "enter password"
+			return m, nil
+		}
+		m.currentRequest.Password = m.passwordInput.Value()
+		m.passwordInput.SetValue("")
+		m.passwordError = ""
+		return m.startTransfer()
+	}
+	var cmd tea.Cmd
+	m.passwordInput, cmd = m.passwordInput.Update(msg)
 	return m, cmd
 }
 
@@ -414,6 +458,16 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 		DestinationPath: destination,
 		Remote:          remote,
 	}
+	if remoteNeedsPassword(remote) {
+		m.passwordInput.SetValue("")
+		m.passwordError = ""
+		m.state = StatePassword
+		return *m, nil
+	}
+	return m.startTransfer()
+}
+
+func (m *Model) startTransfer() (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelTransfer = cancel
 	m.transferEvents = m.services.Transferer.Begin(ctx, m.currentRequest)
@@ -424,11 +478,14 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 	return *m, waitForTransfer(m.transferEvents)
 }
 
-func (m *Model) setWidth(width int) {
+func (m *Model) setSize(width int, height int) {
 	if width <= 0 {
-		return
+		width = m.width
 	}
 	m.width = width
+	if height > 0 {
+		m.height = height
+	}
 	m.input.Width = m.inputTextWidth()
 }
 
@@ -438,6 +495,10 @@ func (m Model) viewWidth() int {
 
 func (m Model) innerWidth() int {
 	return max(36, m.viewWidth()-4)
+}
+
+func (m Model) innerHeight() int {
+	return max(12, m.height-2)
 }
 
 func (m Model) inputBoxWidth() int {
@@ -481,8 +542,18 @@ func (m Model) renderDropView() string {
 	return b.String()
 }
 
+func (m Model) renderPasswordView() string {
+	return lipgloss.Place(
+		m.innerWidth(),
+		m.innerHeight(),
+		lipgloss.Center,
+		lipgloss.Center,
+		m.renderPasswordPrompt(),
+	)
+}
+
 func (m Model) remoteForDropView() session.Remote {
-	if m.state == StateUpload || m.state == StateConfirmQuit {
+	if m.state == StatePassword || m.state == StateUpload || m.state == StateConfirmQuit {
 		return m.currentRequest.Remote
 	}
 	return m.SelectedRemote()
@@ -499,6 +570,9 @@ func (m Model) renderTransferDetails() string {
 }
 
 func (m Model) renderFooter() string {
+	if m.state == StatePassword {
+		return mutedStyle.Render("enter upload · esc cancel · ctrl+c quit")
+	}
 	if m.state == StateConfirmQuit {
 		return errorStyle.Render("Cancel upload and quit? y/n")
 	}
@@ -519,6 +593,31 @@ func (m Model) renderInput() string {
 	return inputBoxStyle.Width(m.inputBoxWidth()).Render(content)
 }
 
+func (m Model) renderPasswordPrompt() string {
+	remote := m.currentRequest.Remote
+	content := []string{
+		sectionStyle.Render("SSH password for " + remote.Target()),
+		m.renderPasswordInput(),
+	}
+	if m.passwordError != "" {
+		content = append(content, errorStyle.Render(m.passwordError))
+	}
+	content = append(content, mutedStyle.Render("enter upload · esc cancel · ctrl+c quit"))
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("12")).
+		Padding(0, 1).
+		Render(strings.Join(content, "\n"))
+}
+
+func (m Model) renderPasswordInput() string {
+	input := m.passwordInput
+	input.Width = min(28, max(16, m.innerWidth()-18))
+	contentWidth := input.Width + lipgloss.Width(input.Prompt)
+	content := lipgloss.Place(contentWidth, 1, lipgloss.Left, lipgloss.Center, input.View())
+	return inputBoxStyle.Width(contentWidth + 2).Render(content)
+}
+
 func renderRemoteDetails(remote session.Remote) string {
 	return fmt.Sprintf(
 		"%s %s  %s %s  %s %s",
@@ -529,6 +628,10 @@ func renderRemoteDetails(remote session.Remote) string {
 		sectionStyle.Render("Destination:"),
 		remote.Destination,
 	)
+}
+
+func remoteNeedsPassword(remote session.Remote) bool {
+	return remote.User != "" && remote.IdentityFile == ""
 }
 
 func (m Model) header(title string) string {

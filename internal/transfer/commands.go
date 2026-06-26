@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/dineshpandiyan/ssh-drop/internal/session"
@@ -14,6 +16,7 @@ import (
 type Command struct {
 	Name string
 	Args []string
+	Env  []string
 }
 
 type Runner struct {
@@ -27,11 +30,17 @@ func (r Runner) Begin(ctx context.Context, req session.TransferRequest) <-chan s
 		if r.CommandContext == nil {
 			r.CommandContext = exec.CommandContext
 		}
-		if err := r.run(ctx, events, BuildMkdirCommand(req)); err != nil {
+		authEnv, cleanup, err := passwordAuthEnv(req.Password)
+		if err != nil {
+			events <- session.TransferEvent{Done: true, Err: err}
+			return
+		}
+		defer cleanup()
+		if err := r.run(ctx, events, withEnv(BuildMkdirCommand(req), authEnv)); err != nil {
 			events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, err)}
 			return
 		}
-		if err := r.run(ctx, events, BuildRsyncCommand(req)); err != nil {
+		if err := r.run(ctx, events, withEnv(BuildRsyncCommand(req), authEnv)); err != nil {
 			events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, err)}
 			return
 		}
@@ -42,6 +51,9 @@ func (r Runner) Begin(ctx context.Context, req session.TransferRequest) <-chan s
 
 func (r Runner) run(ctx context.Context, events chan<- session.TransferEvent, command Command) error {
 	cmd := r.CommandContext(ctx, command.Name, command.Args...)
+	if len(command.Env) > 0 {
+		cmd.Env = append(cmd.Environ(), command.Env...)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("%s stdout: %w", command.Name, err)
@@ -63,6 +75,39 @@ func (r Runner) run(ctx context.Context, events chan<- session.TransferEvent, co
 		return fmt.Errorf("%s failed: %w", command.Name, err)
 	}
 	return nil
+}
+
+func withEnv(command Command, env []string) Command {
+	if len(env) == 0 {
+		return command
+	}
+	command.Env = append(command.Env, env...)
+	return command
+}
+
+func passwordAuthEnv(password string) ([]string, func(), error) {
+	if password == "" {
+		return nil, func() {}, nil
+	}
+	dir, err := os.MkdirTemp("", "ssh-drop-askpass-")
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("askpass temp dir: %w", err)
+	}
+	cleanup := func() {
+		_ = os.RemoveAll(dir)
+	}
+	helper := filepath.Join(dir, "askpass")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$SSH_DROP_PASSWORD\"\n"
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("askpass helper: %w", err)
+	}
+	return []string{
+		"SSH_ASKPASS=" + helper,
+		"SSH_ASKPASS_REQUIRE=force",
+		"SSH_DROP_PASSWORD=" + password,
+		"DISPLAY=ssh-drop",
+	}, cleanup, nil
 }
 
 func streamOutput(events chan<- session.TransferEvent, reader io.Reader, done chan<- struct{}) {

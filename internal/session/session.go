@@ -55,6 +55,7 @@ type TransferRequest struct {
 	DestinationDir  string
 	DestinationPath string
 	Remote          Remote
+	Password        string
 }
 
 type TransferEvent struct {

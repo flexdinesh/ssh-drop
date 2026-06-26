@@ -1,7 +1,13 @@
 package transfer_test
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dineshpandiyan/ssh-drop/internal/session"
@@ -79,4 +85,92 @@ func TestPOSIXQuoteHandlesSingleQuotes(t *testing.T) {
 	if got != want {
 		t.Fatalf("unexpected quote:\nwant %s\ngot  %s", want, got)
 	}
+}
+
+func TestRunnerUsesAskpassForPasswordRequests(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "askpass.log")
+	runner := transfer.Runner{
+		CommandContext: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestAskpassHelperProcess", "--", name)
+			cmd.Env = append(os.Environ(),
+				"GO_WANT_ASKPASS_HELPER=1",
+				"SSH_DROP_HELPER_LOG="+logPath,
+			)
+			return cmd
+		},
+	}
+	req := session.TransferRequest{
+		LocalPath:       "/Users/dee/report.txt",
+		DestinationPath: "/tmp/report.txt",
+		DestinationDir:  "/tmp",
+		Password:        "secret-pass",
+		Remote: session.Remote{
+			Name:        "files",
+			Host:        "files.example.com",
+			User:        "deploy",
+			Destination: "/tmp",
+		},
+	}
+
+	var done session.TransferEvent
+	for event := range runner.Begin(context.Background(), req) {
+		if event.Done {
+			done = event
+		}
+	}
+	if done.Err != nil {
+		t.Fatalf("transfer failed: %v", done.Err)
+	}
+	bytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(bytes))
+	want := strings.Join([]string{
+		"ssh|force|ssh-drop|secret-pass",
+		"rsync|force|ssh-drop|secret-pass",
+	}, "\n")
+	if got != want {
+		t.Fatalf("unexpected askpass env:\nwant %s\ngot  %s", want, got)
+	}
+}
+
+func TestAskpassHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_ASKPASS_HELPER") != "1" {
+		return
+	}
+	askpass := os.Getenv("SSH_ASKPASS")
+	output, err := exec.Command(askpass).Output()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "askpass failed: %v\n", err)
+		os.Exit(2)
+	}
+	commandName := ""
+	for i, arg := range os.Args {
+		if arg == "--" && i+1 < len(os.Args) {
+			commandName = os.Args[i+1]
+			break
+		}
+	}
+	line := fmt.Sprintf(
+		"%s|%s|%s|%s\n",
+		commandName,
+		os.Getenv("SSH_ASKPASS_REQUIRE"),
+		os.Getenv("DISPLAY"),
+		strings.TrimSpace(string(output)),
+	)
+	file, err := os.OpenFile(os.Getenv("SSH_DROP_HELPER_LOG"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open log failed: %v\n", err)
+		os.Exit(2)
+	}
+	if _, err := file.WriteString(line); err != nil {
+		fmt.Fprintf(os.Stderr, "write log failed: %v\n", err)
+		os.Exit(2)
+	}
+	if err := file.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "close log failed: %v\n", err)
+		os.Exit(2)
+	}
+	os.Exit(0)
 }
