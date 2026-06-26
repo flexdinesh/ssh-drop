@@ -26,7 +26,7 @@ go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@latest
 go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@v0.1.0
 ```
 
-`ssh-drop` also requires `rsync` in your `PATH` for transfers. The Homebrew cask installs `rsync`.
+`ssh-drop` also requires `rsync` in your `PATH` for transfers. macOS includes `rsync`; install it with `brew install rsync` if your system does not provide it.
 
 Clipboard copy uses the first available backend from `pbcopy`, `wl-copy`, or `xclip`. macOS includes `pbcopy`; Linux users can install `wl-clipboard` or `xclip` if they want automatic clipboard copy after upload.
 

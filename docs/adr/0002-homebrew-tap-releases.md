@@ -23,8 +23,8 @@ The release workflow opens or updates a pull request against the tap instead of
 pushing directly to tap `main`. The tap branch is deterministic per version, such
 as `ssh-drop-v0.1.0`, so rerunning a release updates the same pull request.
 
-The cask declares `rsync` as a runtime dependency and leaves Linux clipboard
-tools optional.
+The cask documents `rsync` as a required command in its caveats and leaves Linux
+clipboard tools optional.
 
 ## Consequences
 
@@ -35,6 +35,9 @@ request access to `flexdinesh/homebrew-tap`.
 
 The tap repository remains responsible for Homebrew-native style, audit, and
 install checks before a cask update is merged.
+
+GoReleaser's generated cask dependency array does not pass tap style checks, so
+the cask does not declare `rsync` as a Homebrew dependency.
 
 GoReleaser's formula publisher is deprecated in newer versions, so `ssh-drop`
 uses the supported cask publisher.

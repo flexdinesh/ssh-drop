@@ -87,7 +87,7 @@ homebrew_casks:
     description: Interactive CLI for dropping local files onto SSH remotes with rsync
     binaries:
       - ssh-drop
-    dependencies:
-      - formula: rsync
     caveats: |
+      ssh-drop requires rsync in your PATH for transfers.
+      Install it with `brew install rsync` if your system does not provide it.
       Run `ssh-drop --help` to view available command-line options.

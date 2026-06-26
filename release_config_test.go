@@ -99,9 +99,9 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 		"homepage: https://github.com/flexdinesh/ssh-drop",
 		"binaries:",
 		"- ssh-drop",
-		"dependencies:",
-		"- formula: rsync",
 		"caveats:",
+		"ssh-drop requires rsync in your PATH for transfers.",
+		"Install it with `brew install rsync` if your system does not provide it.",
 		"Run `ssh-drop --help` to view available command-line options.",
 	} {
 		if !strings.Contains(config, want) {
@@ -112,6 +112,8 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 	for _, deprecated := range []string{
 		"brews:",
 		"directory: Formula",
+		"dependencies:",
+		"- formula: rsync",
 	} {
 		if strings.Contains(config, deprecated) {
 			t.Fatalf(".goreleaser.yaml should not contain deprecated formula config %q", deprecated)

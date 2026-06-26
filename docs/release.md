@@ -61,12 +61,12 @@ the GitHub Release in this repository.
 ## Homebrew
 
 The Homebrew cask installs prebuilt release archives instead of building from
-source. It declares `rsync` as a runtime dependency because `ssh-drop` requires
-`rsync` to transfer files.
+source. It documents `rsync` as a required command in the cask caveats because
+`ssh-drop` requires `rsync` to transfer files.
 
-The cask does not install Linux clipboard tools. Clipboard copy is optional
-after a successful upload; Linux users can install `wl-clipboard` or `xclip` if
-they want automatic clipboard copy.
+The cask does not install `rsync` or Linux clipboard tools. Clipboard copy is
+optional after a successful upload; Linux users can install `wl-clipboard` or
+`xclip` if they want automatic clipboard copy.
 
 The tap pull request branch is deterministic per version, such as
 `ssh-drop-v0.1.0`, so rerunning a failed release updates the same tap pull
