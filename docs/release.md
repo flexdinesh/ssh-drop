@@ -41,6 +41,11 @@ The workflow creates the tag, runs GoReleaser, publishes macOS and Linux
 archives plus checksums, and opens or updates a pull request against
 `flexdinesh/homebrew-tap`.
 
+If GitHub Release publishing succeeds but a downstream publisher fails, rerun
+the workflow from the same commit after fixing the downstream issue. The
+workflow reuses the tag already on `HEAD`, and GoReleaser replaces the existing
+GitHub Release assets before retrying the remaining publishers.
+
 Do not create a moving `latest` tag. Go already resolves `@latest` to the
 newest SemVer tag.
 

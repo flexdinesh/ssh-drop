@@ -66,9 +66,12 @@ func TestStableReleaseWorkflowPublishesSemverTags(t *testing.T) {
 		"ref: main",
 		"fetch-depth: 0",
 		"go test ./...",
+		"git tag --points-at HEAD",
 		"git tag -l 'v0.1.*'",
+		"create=false",
 		"next=\"v0.1.0\"",
 		"git push origin",
+		"steps.tag.outputs.create",
 		"args: release --clean",
 	} {
 		if !strings.Contains(workflow, want) {
@@ -80,6 +83,8 @@ func TestStableReleaseWorkflowPublishesSemverTags(t *testing.T) {
 func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 	config := readFile(t, ".goreleaser.yaml")
 	for _, want := range []string{
+		"release:",
+		"replace_existing_artifacts: true",
 		"brews:",
 		"name: ssh-drop",
 		"owner: flexdinesh",
