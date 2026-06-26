@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/app"
+	"github.com/flexdinesh/ssh-drop/internal/app"
 )
 
 var version = "dev"

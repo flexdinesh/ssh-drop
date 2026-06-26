@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/session"
 )
 
 type Command struct {

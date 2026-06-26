@@ -11,8 +11,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
-	"github.com/dineshpandiyan/ssh-drop/internal/tui"
+	"github.com/flexdinesh/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/tui"
 )
 
 func TestMultipleRemotesStartAtPickerInConfigOrder(t *testing.T) {

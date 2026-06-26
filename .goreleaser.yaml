@@ -1,0 +1,88 @@
+version: 2
+
+project_name: ssh-drop
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ssh-drop
+    main: ./cmd/ssh-drop
+    binary: ssh-drop
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: tarballs
+    ids:
+      - ssh-drop
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 2
+    - title: Maintenance
+      regexp: '^.*?(chore|refactor|test|ci)(\(.+\))??!?:.+$'
+      order: 3
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^Merge pull request'
+      - '^Merge branch'
+
+brews:
+  - name: ssh-drop
+    repository:
+      owner: flexdinesh
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      branch: "ssh-drop-{{ .Tag }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: flexdinesh
+          name: homebrew-tap
+          branch: main
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "Update ssh-drop to {{ .Tag }}"
+    directory: Formula
+    homepage: https://github.com/flexdinesh/ssh-drop
+    description: Interactive CLI for dropping local files onto SSH remotes with rsync
+    dependencies:
+      - rsync
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/ssh-drop --version")

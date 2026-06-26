@@ -1,4 +1,4 @@
-module github.com/dineshpandiyan/ssh-drop
+module github.com/flexdinesh/ssh-drop
 
 go 1.23.0
 

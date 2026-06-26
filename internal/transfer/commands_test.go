@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
-	"github.com/dineshpandiyan/ssh-drop/internal/transfer"
+	"github.com/flexdinesh/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/transfer"
 )
 
 func TestAliasRemoteBuildsMkdirAndRsyncCommands(t *testing.T) {

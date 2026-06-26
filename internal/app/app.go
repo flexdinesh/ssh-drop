@@ -8,9 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/config"
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
-	"github.com/dineshpandiyan/ssh-drop/internal/tui"
+	"github.com/flexdinesh/ssh-drop/internal/config"
+	"github.com/flexdinesh/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/tui"
 )
 
 type Deps struct {

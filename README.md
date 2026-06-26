@@ -4,19 +4,27 @@ ssh drop is an interactive CLI that transfers local files to remote machines ove
 
 ## Install
 
-Make sure you have [go](https://go.dev) installed in your machine. If you're on MacOS, [brew](https://formulae.brew.sh/formula/go) is the easiest way.
+The stable install path is Homebrew:
+
+```bash
+brew install flexdinesh/tap/ssh-drop
+```
+
+Go install is also supported if you already have [Go](https://go.dev) installed.
 
 `@latest` resolves to the newest stable SemVer tag, such as `v0.1.0`. There is no moving `latest` Git tag.
 
 ```bash
 # Install the latest stable release.
-go install github.com/dineshpandiyan/ssh-drop/cmd/ssh-drop@latest
+go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@latest
 
 # Install a specific stable release.
-go install github.com/dineshpandiyan/ssh-drop/cmd/ssh-drop@v0.1.0
+go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@v0.1.0
 ```
 
-`ssh-drop` also requires `rsync` in your `PATH` for transfers and a clipboard backend (`pbcopy`, `xclip`, or `xsel`) to copy the remote destination path after upload.
+`ssh-drop` also requires `rsync` in your `PATH` for transfers. The Homebrew formula installs `rsync`.
+
+Clipboard copy uses the first available backend from `pbcopy`, `wl-copy`, or `xclip`. macOS includes `pbcopy`; Linux users can install `wl-clipboard` or `xclip` if they want automatic clipboard copy after upload.
 
 ## Usage
 
@@ -65,3 +73,7 @@ destination = /tmp/ssh-drop/
 ```
 
 Config values expand `~` and environment variables. If the config is missing, `ssh-drop` prints a sample to get you started.
+
+## Releases
+
+Releases are created from `main`. See [docs/release.md](docs/release.md).

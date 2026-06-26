@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/session"
 )
 
 var ErrMissingConfig = errors.New("missing config")

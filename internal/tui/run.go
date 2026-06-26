@@ -13,9 +13,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dineshpandiyan/ssh-drop/internal/clipboard"
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
-	"github.com/dineshpandiyan/ssh-drop/internal/transfer"
+	"github.com/flexdinesh/ssh-drop/internal/clipboard"
+	"github.com/flexdinesh/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/transfer"
 )
 
 type State int

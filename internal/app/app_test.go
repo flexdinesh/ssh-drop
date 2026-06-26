@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dineshpandiyan/ssh-drop/internal/app"
-	"github.com/dineshpandiyan/ssh-drop/internal/session"
+	"github.com/flexdinesh/ssh-drop/internal/app"
+	"github.com/flexdinesh/ssh-drop/internal/session"
 )
 
 func TestHelpPrintsV1Surface(t *testing.T) {
