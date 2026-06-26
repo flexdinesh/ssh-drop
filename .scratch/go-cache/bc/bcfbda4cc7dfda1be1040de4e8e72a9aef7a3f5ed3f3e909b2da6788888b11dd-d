@@ -1,0 +1,24 @@
+# test log
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestMissingConfigFailsWithSample2251797570/001/.config/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestConfigLoadsRemotesInOrderAndStartsUI3321346995/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestConfigLoadsRemotesInOrderAndStartsUI3321346995/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestUnknownRemoteFailsBeforeUI201634929/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestUnknownRemoteFailsBeforeUI201634929/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestMissingEnvVarInConfigFailsBeforeUI1765249734/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestMissingEnvVarInConfigFailsBeforeUI1765249734/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestMissingRsyncFailsBeforeUI53501132/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestMissingRsyncFailsBeforeUI53501132/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestNormalQuitPrintsCompactSummaryAndExitsZero2032651607/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestNormalQuitPrintsCompactSummaryAndExitsZero2032651607/001/ssh-drop.conf
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build

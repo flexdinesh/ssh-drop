@@ -1,0 +1,26 @@
+# test log
+getenv NO_COLOR
+getenv GOTMPDIR
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputRejectsInvalidLocalFiles1801868132/001/missing.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputRejectsInvalidLocalFiles1801868132/001
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputAcceptsOneRegularFileAndComputesDestination1085512902/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputAcceptsOneRegularFileAndComputesDestination1085512902/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestClipboardFailureIsWarningNotTransferFailure1211580669/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestClipboardFailureIsWarningNotTransferFailure1211580669/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestTransferFailureReturnsToDropAndCountsFailure888937169/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestTransferFailureReturnsToDropAndCountsFailure888937169/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestEscapeCancelsUploadAndKeepsSessionOpen2530928010/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestEscapeCancelsUploadAndKeepsSessionOpen2530928010/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestQDuringUploadRequiresConfirmation2650939909/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestQDuringUploadRequiresConfirmation2650939909/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build

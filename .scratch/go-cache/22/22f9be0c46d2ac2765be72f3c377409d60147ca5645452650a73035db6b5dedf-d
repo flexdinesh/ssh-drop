@@ -1,0 +1,10 @@
+# test log
+getenv NO_COLOR
+getenv GOTMPDIR
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputRejectsInvalidLocalFiles207305711/001/missing.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputRejectsInvalidLocalFiles207305711/001
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
+getenv GOTMPDIR
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputAcceptsOneRegularFileAndComputesDestination3420277287/001/report.txt
+stat /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build/TestDropInputAcceptsOneRegularFileAndComputesDestination3420277287/001/report.txt
+open /Users/dineshpandiyan/workspace/ssh-drop/.scratch/go-build
