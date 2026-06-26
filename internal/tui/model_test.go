@@ -3,12 +3,14 @@ package tui_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/dineshpandiyan/ssh-drop/internal/session"
 	"github.com/dineshpandiyan/ssh-drop/internal/tui"
 )
@@ -44,8 +46,10 @@ func TestPreselectedRemoteStartsAtDropScreen(t *testing.T) {
 	if got := model.SelectedRemote().Name; got != "files" {
 		t.Fatalf("expected files selected, got %q", got)
 	}
-	if !strings.Contains(model.View(), "deploy@files.example.com") {
-		t.Fatalf("drop screen should show selected remote details:\n%s", model.View())
+	for _, want := range []string{"Name: files", "Target: deploy@files.example.com", "Destination: /var/tmp"} {
+		if !viewContains(model.View(), want) {
+			t.Fatalf("drop screen should show selected remote detail %q:\n%s", want, model.View())
+		}
 	}
 }
 
@@ -89,7 +93,7 @@ func TestDropInputRejectsInvalidLocalFiles(t *testing.T) {
 	}, tui.Services{})
 
 	model = submitPath(t, model, filepath.Join(dir, "missing.txt"))
-	if !strings.Contains(model.View(), "does not exist") {
+	if !viewContains(model.View(), "does not exist") {
 		t.Fatalf("expected missing path validation:\n%s", model.View())
 	}
 
@@ -97,7 +101,7 @@ func TestDropInputRejectsInvalidLocalFiles(t *testing.T) {
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 	model = submitPath(t, model, dir)
-	if !strings.Contains(model.View(), "regular file") {
+	if !viewContains(model.View(), "regular file") {
 		t.Fatalf("expected regular file validation:\n%s", model.View())
 	}
 }
@@ -127,8 +131,62 @@ func TestDropInputAcceptsOneRegularFileAndComputesDestination(t *testing.T) {
 	if clipboard.Copied != "/uploads/report.txt" {
 		t.Fatalf("expected copied destination, got %q", clipboard.Copied)
 	}
-	if !strings.Contains(model.View(), "/uploads/report.txt") {
-		t.Fatalf("view should display computed destination:\n%s", model.View())
+	for _, want := range []string{fmt.Sprintf("Source: %s", file), "Destination: /uploads/report.txt"} {
+		if !viewContains(model.View(), want) {
+			t.Fatalf("view should display %q:\n%s", want, model.View())
+		}
+	}
+	if !viewContains(model.View(), "Sync successful. Remote path copied to clipboard. ✓") {
+		t.Fatalf("view should display clipboard success status:\n%s", model.View())
+	}
+}
+
+func TestDropScreenShowsIdleStatus(t *testing.T) {
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
+	}, tui.Services{})
+
+	if !strings.Contains(model.View(), "Status: idle") {
+		t.Fatalf("drop screen should show idle status:\n%s", model.View())
+	}
+}
+
+func TestUploadScreenShowsSyncingStatus(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "report.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
+	}, tui.Services{Transferer: &fakeTransfer{}, Clipboard: &fakeClipboard{}})
+	model = update(t, model, tea.WindowSizeMsg{Width: 240, Height: 40})
+	idleFileLine := lineIndexContaining(model.View(), "File")
+
+	model = submitPath(t, model, file)
+
+	if !strings.Contains(model.View(), "syncing") {
+		t.Fatalf("upload screen should show syncing status:\n%s", model.View())
+	}
+	if got := lineIndexContaining(model.View(), "File"); got != idleFileLine {
+		t.Fatalf("file input moved from line %d to %d while syncing:\n%s", idleFileLine, got, model.View())
+	}
+	for _, want := range []string{fmt.Sprintf("Source: %s", file), "Destination: /uploads/report.txt"} {
+		if !viewContains(model.View(), want) {
+			t.Fatalf("upload screen should show transfer detail %q:\n%s", want, model.View())
+		}
+	}
+}
+
+func TestWindowSizeExpandsTUIWidth(t *testing.T) {
+	model := tui.NewModel(session.Start{
+		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
+	}, tui.Services{})
+
+	model = update(t, model, tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	if got := widestLine(model.View()); got < 120 {
+		t.Fatalf("expected rendered view to use terminal width, widest line was %d:\n%s", got, model.View())
 	}
 }
 
@@ -178,10 +236,9 @@ func TestClipboardFailureIsWarningNotTransferFailure(t *testing.T) {
 	if model.Summary().Successes != 1 || model.Summary().Failures != 0 {
 		t.Fatalf("clipboard failure should not fail transfer: %#v", model.Summary())
 	}
-	view := model.View()
-	for _, want := range []string{"uploaded /uploads/report.txt", "clipboard warning: no clipboard"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("view missing %q:\n%s", want, view)
+	for _, want := range []string{fmt.Sprintf("Source: %s", file), "Destination: /uploads/report.txt", "clipboard warning: no clipboard"} {
+		if !viewContains(model.View(), want) {
+			t.Fatalf("view missing %q:\n%s", want, model.View())
 		}
 	}
 }
@@ -321,6 +378,31 @@ func key(value string) tea.KeyMsg {
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(value)}
 	}
+}
+
+func widestLine(view string) int {
+	widest := 0
+	for _, line := range strings.Split(view, "\n") {
+		widest = max(widest, lipgloss.Width(line))
+	}
+	return widest
+}
+
+func lineIndexContaining(view string, needle string) int {
+	for i, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, needle) {
+			return i
+		}
+	}
+	return -1
+}
+
+func viewContains(view string, want string) bool {
+	return strings.Contains(compact(view), compact(want))
+}
+
+func compact(value string) string {
+	return strings.Join(strings.Fields(value), "")
 }
 
 func configWithRemotes() session.Config {

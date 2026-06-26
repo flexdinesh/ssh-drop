@@ -42,6 +42,17 @@ func (s State) String() string {
 	}
 }
 
+type statusKind int
+
+const (
+	statusIdle statusKind = iota
+	statusSyncing
+	statusSuccess
+	statusWarning
+	statusError
+	statusCanceled
+)
+
 type Services struct {
 	Stat       func(string) (os.FileInfo, error)
 	Transferer Transferer
@@ -67,6 +78,7 @@ type Model struct {
 	selected        int
 	input           textinput.Model
 	status          string
+	statusKind      statusKind
 	lastDestination string
 	currentRequest  session.TransferRequest
 	transferEvents  <-chan session.TransferEvent
@@ -76,13 +88,22 @@ type Model struct {
 	summary         session.Summary
 	quitting        bool
 	quitAfterCancel bool
+	width           int
 }
 
 var (
-	titleStyle    = lipgloss.NewStyle().Bold(true)
-	selectedStyle = lipgloss.NewStyle().Bold(true)
-	mutedStyle    = lipgloss.NewStyle().Faint(true)
-	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	titleStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+	sectionStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	selectedStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("10"))
+	mutedStyle      = lipgloss.NewStyle().Faint(true)
+	errorStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	successStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	warningStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	syncingStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	statusNameStyle = lipgloss.NewStyle().Bold(true)
+	inputBoxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
+	panelStyle      = lipgloss.NewStyle().Padding(1, 2)
+	ruleStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 func NewModel(start session.Start, services Services) Model {
@@ -99,7 +120,7 @@ func NewModel(start session.Start, services Services) Model {
 	input.Placeholder = "Drop or paste a plain local file path"
 	input.Focus()
 	input.CharLimit = 4096
-	input.Width = 80
+	input.Width = 68
 
 	model := Model{
 		start:    start,
@@ -107,7 +128,9 @@ func NewModel(start session.Start, services Services) Model {
 		selected: -1,
 		input:    input,
 		services: services,
+		width:    80,
 	}
+	model.input.Width = model.inputTextWidth()
 	if start.PreselectedRemote != "" {
 		for i, remote := range start.Config.Remotes {
 			if remote.Name == start.PreselectedRemote {
@@ -138,11 +161,14 @@ func Run(start session.Start) (session.Summary, error) {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, tea.ClearScreen)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.setWidth(msg.Width)
+		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch m.state {
 		case StateRemotePicker:
@@ -164,7 +190,7 @@ func (m Model) View() string {
 	var b strings.Builder
 	switch m.state {
 	case StateRemotePicker:
-		b.WriteString(titleStyle.Render("Choose remote"))
+		b.WriteString(m.header("Choose remote"))
 		b.WriteString("\n\n")
 		for i, remote := range m.start.Config.Remotes {
 			cursor := "  "
@@ -179,41 +205,11 @@ func (m Model) View() string {
 		b.WriteString("\n")
 		b.WriteString(mutedStyle.Render("enter select · q quit"))
 	case StateDrop:
-		remote := m.SelectedRemote()
-		b.WriteString(titleStyle.Render("Drop file"))
-		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("Remote: %s  %s  -> %s\n\n", remote.Name, remote.Target(), remote.Destination))
-		b.WriteString(m.input.View())
-		b.WriteString("\n\n")
-		if m.status != "" {
-			if isErrorStatus(m.status) {
-				b.WriteString(errorStyle.Render(m.status))
-			} else {
-				b.WriteString(m.status)
-			}
-			b.WriteString("\n\n")
-		}
-		b.WriteString(mutedStyle.Render("enter upload · r remote · q quit · ctrl+c quit"))
+		b.WriteString(m.renderDropView())
 	case StateUpload, StateConfirmQuit:
-		remote := m.currentRequest.Remote
-		b.WriteString(titleStyle.Render("Uploading"))
-		b.WriteString("\n\n")
-		b.WriteString(fmt.Sprintf("Remote: %s  %s  -> %s\n", remote.Name, remote.Target(), remote.Destination))
-		b.WriteString(fmt.Sprintf("Destination: %s\n\n", m.currentRequest.DestinationPath))
-		if m.uploadOutput != "" {
-			b.WriteString(m.uploadOutput)
-			if !strings.HasSuffix(m.uploadOutput, "\n") {
-				b.WriteString("\n")
-			}
-			b.WriteString("\n")
-		}
-		if m.state == StateConfirmQuit {
-			b.WriteString(errorStyle.Render("Cancel upload and quit? y/n"))
-		} else {
-			b.WriteString(mutedStyle.Render("esc cancel · q quit · ctrl+c quit"))
-		}
+		b.WriteString(m.renderDropView())
 	}
-	return b.String()
+	return panelStyle.Width(m.viewWidth()).Render(b.String())
 }
 
 func (m Model) State() State {
@@ -262,6 +258,7 @@ func (m Model) updatePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selected = m.cursor
 			m.state = StateDrop
 			m.status = ""
+			m.statusKind = statusIdle
 		}
 	}
 	return m, nil
@@ -283,6 +280,7 @@ func (m Model) updateDrop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.input.Value() == "" {
 				m.state = StateRemotePicker
 				m.cursor = m.selected
+				m.statusKind = statusIdle
 				return m, nil
 			}
 		}
@@ -352,6 +350,7 @@ func (m Model) updateTransfer(event session.TransferEvent) (tea.Model, tea.Cmd) 
 	if errors.Is(event.Err, session.ErrTransferCanceled) {
 		m.summary.Canceled++
 		m.status = fmt.Sprintf("canceled upload to %s", m.currentRequest.DestinationPath)
+		m.statusKind = statusCanceled
 		m.state = StateDrop
 		if m.quitAfterCancel {
 			m.quitting = true
@@ -362,15 +361,18 @@ func (m Model) updateTransfer(event session.TransferEvent) (tea.Model, tea.Cmd) 
 	if event.Err != nil {
 		m.summary.Failures++
 		m.status = transferFailureStatus(event.Err, m.uploadOutput)
+		m.statusKind = statusError
 		m.state = StateDrop
 		return m, nil
 	}
 	m.summary.Successes++
 	m.summary.SuccessfulDestinations = append(m.summary.SuccessfulDestinations, m.currentRequest.DestinationPath)
 	if err := m.services.Clipboard.Copy(m.currentRequest.DestinationPath); err != nil {
-		m.status = fmt.Sprintf("uploaded %s\nclipboard warning: %v", m.currentRequest.DestinationPath, err)
+		m.status = transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath) + fmt.Sprintf("\nclipboard warning: %v", err)
+		m.statusKind = statusWarning
 	} else {
-		m.status = fmt.Sprintf("uploaded %s\ncopied %s", m.currentRequest.DestinationPath, m.currentRequest.DestinationPath)
+		m.status = transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath)
+		m.statusKind = statusSuccess
 	}
 	m.state = StateDrop
 	return m, nil
@@ -380,10 +382,12 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 	localPath := strings.TrimSpace(m.input.Value())
 	if localPath == "" {
 		m.status = "enter a file path"
+		m.statusKind = statusError
 		return *m, nil
 	}
 	if strings.Contains(localPath, "\n") {
 		m.status = "enter one plain local file path"
+		m.statusKind = statusError
 		return *m, nil
 	}
 	localPath, info, err := resolveLocalPath(localPath, m.services.Stat)
@@ -393,10 +397,12 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 		} else {
 			m.status = err.Error()
 		}
+		m.statusKind = statusError
 		return *m, nil
 	}
 	if !info.Mode().IsRegular() {
 		m.status = fmt.Sprintf("%s is not a regular file", localPath)
+		m.statusKind = statusError
 		return *m, nil
 	}
 	remote := m.SelectedRemote()
@@ -413,8 +419,195 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 	m.transferEvents = m.services.Transferer.Begin(ctx, m.currentRequest)
 	m.uploadOutput = ""
 	m.status = ""
+	m.statusKind = statusSyncing
 	m.state = StateUpload
 	return *m, waitForTransfer(m.transferEvents)
+}
+
+func (m *Model) setWidth(width int) {
+	if width <= 0 {
+		return
+	}
+	m.width = width
+	m.input.Width = m.inputTextWidth()
+}
+
+func (m Model) viewWidth() int {
+	return max(40, m.width)
+}
+
+func (m Model) innerWidth() int {
+	return max(36, m.viewWidth()-4)
+}
+
+func (m Model) inputBoxWidth() int {
+	return max(24, m.innerWidth()-4)
+}
+
+func (m Model) inputContentWidth() int {
+	return max(20, m.inputBoxWidth()-4)
+}
+
+func (m Model) inputTextWidth() int {
+	return max(18, m.inputContentWidth()-lipgloss.Width(m.input.Prompt))
+}
+
+func (m Model) renderDropView() string {
+	var b strings.Builder
+	remote := m.remoteForDropView()
+
+	b.WriteString(m.header("Drop file"))
+	b.WriteString("\n\n")
+	b.WriteString(sectionStyle.Render("Remote"))
+	b.WriteString("\n")
+	b.WriteString(renderRemoteDetails(remote))
+	b.WriteString("\n\n")
+	b.WriteString(m.renderStatus())
+	b.WriteString("\n\n")
+	b.WriteString(sectionStyle.Render("File"))
+	b.WriteString("\n")
+	b.WriteString(m.renderInput())
+	b.WriteString("\n\n")
+	b.WriteString(m.renderTransferDetails())
+	b.WriteString("\n\n")
+	if m.uploadOutput != "" {
+		b.WriteString(m.uploadOutput)
+		if !strings.HasSuffix(m.uploadOutput, "\n") {
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(m.renderFooter())
+	return b.String()
+}
+
+func (m Model) remoteForDropView() session.Remote {
+	if m.state == StateUpload || m.state == StateConfirmQuit {
+		return m.currentRequest.Remote
+	}
+	return m.SelectedRemote()
+}
+
+func (m Model) renderTransferDetails() string {
+	if m.state == StateUpload || m.state == StateConfirmQuit {
+		return transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath)
+	}
+	if m.status != "" {
+		return ensureMinLines(renderStatusMessage(m.status, m.statusKind), 2)
+	}
+	return ensureMinLines("", 2)
+}
+
+func (m Model) renderFooter() string {
+	if m.state == StateConfirmQuit {
+		return errorStyle.Render("Cancel upload and quit? y/n")
+	}
+	if m.state == StateUpload {
+		return mutedStyle.Render("esc cancel · q quit · ctrl+c quit")
+	}
+	return mutedStyle.Render("enter upload · r remote · q quit · ctrl+c quit")
+}
+
+func (m Model) renderInput() string {
+	contentWidth := m.inputContentWidth()
+	input := m.input
+	input.Width = m.inputTextWidth()
+	if input.Value() == "" {
+		_ = input.SetCursorMode(textinput.CursorHide)
+	}
+	content := lipgloss.Place(contentWidth, 1, lipgloss.Left, lipgloss.Center, input.View())
+	return inputBoxStyle.Width(m.inputBoxWidth()).Render(content)
+}
+
+func renderRemoteDetails(remote session.Remote) string {
+	return fmt.Sprintf(
+		"%s %s  %s %s  %s %s",
+		sectionStyle.Render("Name:"),
+		selectedStyle.Render(remote.Name),
+		sectionStyle.Render("Target:"),
+		remote.Target(),
+		sectionStyle.Render("Destination:"),
+		remote.Destination,
+	)
+}
+
+func (m Model) header(title string) string {
+	width := m.innerWidth()
+	rule := strings.Repeat("-", max(0, width-lipgloss.Width(title)-1))
+	return titleStyle.Render(title) + " " + ruleStyle.Render(rule)
+}
+
+func (m Model) renderStatus() string {
+	label := "idle"
+	style := mutedStyle
+
+	switch m.statusKind {
+	case statusSyncing:
+		label = "syncing"
+		style = syncingStyle
+	case statusSuccess:
+		label = "Sync successful. Remote path copied to clipboard. ✓"
+		style = successStyle
+	case statusWarning:
+		label = "warning: clipboard not copied"
+		style = warningStyle
+	case statusError:
+		label = "error"
+		style = errorStyle
+	case statusCanceled:
+		label = "canceled"
+		style = warningStyle
+	}
+
+	return sectionStyle.Render("Status: ") + style.Render(label)
+}
+
+func renderStatusMessage(status string, kind statusKind) string {
+	style := lipgloss.NewStyle()
+	switch kind {
+	case statusError:
+		style = errorStyle
+	case statusWarning, statusCanceled:
+		style = warningStyle
+	case statusSuccess:
+		style = successStyle
+	}
+
+	lines := strings.Split(status, "\n")
+	rendered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		rendered = append(rendered, renderStatusLine(line, style))
+	}
+	return strings.Join(rendered, "\n")
+}
+
+func renderStatusLine(line string, style lipgloss.Style) string {
+	if strings.HasPrefix(line, "Source: ") {
+		return line
+	}
+	if strings.HasPrefix(line, "Destination: ") {
+		return line
+	}
+	return style.Render(line)
+}
+
+func transferResultStatus(source string, destination string) string {
+	return fmt.Sprintf("Source: %s\nDestination: %s", source, destination)
+}
+
+func ensureMinLines(value string, minLines int) string {
+	if minLines <= 0 {
+		return value
+	}
+	lineCount := 1
+	if value != "" {
+		lineCount = strings.Count(value, "\n") + 1
+	}
+	for lineCount < minLines {
+		value += "\n"
+		lineCount++
+	}
+	return value
 }
 
 func isErrorStatus(status string) bool {
