@@ -46,6 +46,7 @@ type options struct {
 func Run(args []string, deps Deps) int {
 	deps = deps.withDefaults()
 
+	// instead of manually parsing args, use a library
 	opts, err := parseArgs(args, deps.HomeDir, deps.EnvLookup)
 	if err != nil {
 		fmt.Fprintln(deps.Stderr, err)

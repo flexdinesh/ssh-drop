@@ -50,7 +50,7 @@ func TestGoReleaserPackagesSnapshotsForSupportedPlatforms(t *testing.T) {
 	for _, want := range []string{
 		"go test ./...",
 		"go build ./cmd/ssh-drop",
-		"version: v2.16.0",
+		"version: v2.18.0",
 		"args: release --snapshot --clean",
 	} {
 		if !strings.Contains(ci, want) {
@@ -73,7 +73,7 @@ func TestStableReleaseWorkflowPublishesSemverTags(t *testing.T) {
 		"next=\"v0.1.0\"",
 		"git push origin",
 		"steps.tag.outputs.create",
-		"version: v2.16.0",
+		"version: v2.18.0",
 		"args: release --clean",
 	} {
 		if !strings.Contains(workflow, want) {
@@ -122,7 +122,7 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 
 	workflow := readFile(t, ".github/workflows/release.yml")
 	for _, want := range []string{
-		"version: v2.16.0",
+		"version: v2.18.0",
 		"HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
 	} {
 		if !strings.Contains(workflow, want) {

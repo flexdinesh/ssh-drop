@@ -89,7 +89,7 @@ go build ./cmd/ssh-drop
 goreleaser release --snapshot --clean
 ```
 
-The workflows pin GoReleaser `v2.16.0` so releases can publish Homebrew casks
+The workflows pin GoReleaser `v2.18.0` so releases can publish Homebrew casks
 through `homebrew_casks`. The snapshot command remains useful locally because it
 verifies archive and cask generation without publishing.
 
