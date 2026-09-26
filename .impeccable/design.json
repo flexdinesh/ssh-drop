@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-26T02:48:10.005149+00:00",
+  "title": "Design System: SSH Drop",
+  "extensions": {
+    "colorMeta": {
+      "lime-dark": {
+        "role": "primary",
+        "displayName": "Lime \u00b7 dark terminal",
+        "terminalBackground": "dark"
+      },
+      "lime-light": {
+        "role": "primary",
+        "displayName": "Lime \u00b7 light terminal",
+        "terminalBackground": "light"
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink \u00b7 dark terminal",
+        "terminalBackground": "dark"
+      },
+      "ink-light": {
+        "role": "neutral",
+        "displayName": "Ink \u00b7 light terminal",
+        "terminalBackground": "light"
+      },
+      "muted-dark": {
+        "role": "neutral",
+        "displayName": "Muted sage \u00b7 dark terminal",
+        "terminalBackground": "dark"
+      },
+      "muted-light": {
+        "role": "neutral",
+        "displayName": "Muted sage \u00b7 light terminal",
+        "terminalBackground": "light"
+      },
+      "error-dark": {
+        "role": "secondary",
+        "displayName": "Rose red \u00b7 dark terminal",
+        "terminalBackground": "dark"
+      },
+      "error-light": {
+        "role": "secondary",
+        "displayName": "Rose red \u00b7 light terminal",
+        "terminalBackground": "light"
+      },
+      "warning-dark": {
+        "role": "secondary",
+        "displayName": "Amber \u00b7 dark terminal",
+        "terminalBackground": "dark"
+      },
+      "warning-light": {
+        "role": "secondary",
+        "displayName": "Amber \u00b7 light terminal",
+        "terminalBackground": "light"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Bold terminal headings."
+      },
+      "selected": {
+        "displayName": "Selected",
+        "purpose": "Bold focus and selected remote."
+      }
+    },
+    "breakpoints": [
+      {
+        "name": "compact-height",
+        "value": "20 terminal rows",
+        "condition": "height < 20"
+      },
+      {
+        "name": "compact-password",
+        "value": "16 terminal rows",
+        "condition": "height < 16"
+      },
+      {
+        "name": "short-copy-label",
+        "value": "40 inner terminal columns",
+        "condition": "inner width < 40"
+      }
+    ],
+    "terminal": {
+      "platform": "terminal",
+      "source": [
+        "internal/tui/view.go",
+        "internal/tui/run.go"
+      ],
+      "fontOwner": "terminal",
+      "backgroundOwner": "terminal",
+      "widthCapColumns": 84,
+      "outerInset": {
+        "rows": 1,
+        "columns": 2
+      },
+      "fieldHorizontalPaddingColumns": 1,
+      "passwordInputCapColumns": 28,
+      "passwordPanelCapColumns": 46,
+      "wrapping": "ANSI-aware terminal cells",
+      "preview": "HTML specimens illustrate extracted dark-theme foregrounds and glyphs only; browser font, canvas and dimensions are not application tokens."
+    }
+  },
+  "components": [
+    {
+      "name": "Path input",
+      "kind": "input",
+      "refersTo": "selected-dark",
+      "description": "Standard lime box; terminal-cell border and padding.",
+      "html": "<pre><span class=\"ds-terminal-accent\">\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 &gt; </span><span class=\"ds-terminal-muted\">Drop or paste a local file path</span><span class=\"ds-terminal-accent\"> \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f</span></pre>",
+      "css": ".ds-terminal-accent { color: #B4F566; font-weight: bold; } .ds-terminal-ink { color: #EAF0EA; font-weight: bold; } .ds-terminal-muted { color: #A6BAB4; } .ds-terminal-warning { color: #EAB95A; }"
+    },
+    {
+      "name": "Transfer route",
+      "kind": "custom",
+      "refersTo": "selected-dark",
+      "description": "Completed upload with successful clipboard copy.",
+      "html": "<pre><span class=\"ds-terminal-accent\">FILE \u2713 \u2500\u2500\u2500\u2500\u2500\u2500\u2500 SSH \u2713 \u2500\u2500\u2500\u2500\u2500\u2500\u2500 CLIPBOARD \u2713</span></pre>",
+      "css": ".ds-terminal-accent { color: #B4F566; font-weight: bold; } .ds-terminal-ink { color: #EAF0EA; font-weight: bold; } .ds-terminal-muted { color: #A6BAB4; } .ds-terminal-warning { color: #EAB95A; }"
+    },
+    {
+      "name": "Remote picker",
+      "kind": "nav",
+      "refersTo": "selected-dark",
+      "description": "Selected remote and destination, keyboard driven.",
+      "html": "<pre><span class=\"ds-terminal-accent\">&gt; work  user@remote</span>\n<span class=\"ds-terminal-muted\">  -&gt; /tmp/ssh-drop/\n\u2191/\u2193 choose \u00b7 enter connect \u00b7 q quit</span></pre>",
+      "css": ".ds-terminal-accent { color: #B4F566; font-weight: bold; } .ds-terminal-ink { color: #EAF0EA; font-weight: bold; } .ds-terminal-muted { color: #A6BAB4; } .ds-terminal-warning { color: #EAB95A; }"
+    },
+    {
+      "name": "Password panel",
+      "kind": "input",
+      "refersTo": "selected-dark",
+      "description": "Masked password inside a restrained terminal border.",
+      "html": "<pre><span class=\"ds-terminal-accent\">\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 </span><span class=\"ds-terminal-ink\">SSH password</span><span class=\"ds-terminal-accent\">               \u2502\n\u2502 &gt; ********                 \u2502\n\u2502 </span><span class=\"ds-terminal-muted\">enter connect \u00b7 esc cancel</span><span class=\"ds-terminal-accent\"> \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f</span></pre>",
+      "css": ".ds-terminal-accent { color: #B4F566; font-weight: bold; } .ds-terminal-ink { color: #EAF0EA; font-weight: bold; } .ds-terminal-muted { color: #A6BAB4; } .ds-terminal-warning { color: #EAB95A; }"
+    },
+    {
+      "name": "Clipboard warning",
+      "kind": "custom",
+      "refersTo": "warning-dark",
+      "description": "Transfer remains successful when clipboard copy fails.",
+      "html": "<pre><span class=\"ds-terminal-accent\">FILE \u2713 \u2500\u2500\u2500\u2500\u2500 SSH \u2713 \u2500\u2500\u2500\u2500\u2500 </span><span class=\"ds-terminal-warning\">CLIPBOARD !\nUploaded. Clipboard not copied; use the path above.</span></pre>",
+      "css": ".ds-terminal-accent { color: #B4F566; font-weight: bold; } .ds-terminal-ink { color: #EAF0EA; font-weight: bold; } .ds-terminal-muted { color: #A6BAB4; } .ds-terminal-warning { color: #EAB95A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Route Line",
+    "overview": "Route Line makes the file handoff legible through one input and a visible FILE \u2192 SSH \u2192 CLIPBOARD route. Terminal monospace, sparse spacing, restrained borders and lime focus keep repeated drops quick. The terminal owns the font and background.",
+    "keyCharacteristics": [
+      "One dominant path input",
+      "Persistent remote context",
+      "Text and symbols alongside semantic color",
+      "Compact layouts measured in terminal cells"
+    ],
+    "rules": [
+      {
+        "name": "The Outcome Rule",
+        "body": "Color reinforces written outcomes; it never carries status alone.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do pair outcome colors with explicit text and route symbols.",
+      "Do keep the selected remote visible across repeated drops.",
+      "Do preserve destination paths after successful uploads.",
+      "Do measure wrapping and truncation in terminal cells."
+    ],
+    "donts": [
+      "Don't assign a font, pixel scale or background owned by the terminal.",
+      "Don't report clipboard failure as transfer failure.",
+      "Don't use decorative panels or animations that distract from the file action."
+    ]
+  }
+}

@@ -4,6 +4,9 @@ import "errors"
 
 var ErrTransferCanceled = errors.New("transfer canceled")
 
+var ErrPasswordRequired = errors.New("SSH password required")
+var ErrConnectionLost = errors.New("SSH connection lost")
+
 type Config struct {
 	Remotes []Remote
 }
@@ -56,6 +59,7 @@ type TransferRequest struct {
 	DestinationPath string
 	Remote          Remote
 	Password        string
+	ControlPath     string
 }
 
 type TransferEvent struct {

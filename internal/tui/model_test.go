@@ -16,7 +16,7 @@ import (
 )
 
 func TestMultipleRemotesStartAtPickerInConfigOrder(t *testing.T) {
-	model := tui.NewModel(session.Start{Config: configWithRemotes()}, tui.Services{})
+	model := newModel(t, session.Start{Config: configWithRemotes()}, tui.Services{})
 
 	if model.State() != tui.StateRemotePicker {
 		t.Fatalf("expected remote picker, got %s", model.State())
@@ -35,7 +35,7 @@ func TestMultipleRemotesStartAtPickerInConfigOrder(t *testing.T) {
 }
 
 func TestPreselectedRemoteStartsAtDropScreen(t *testing.T) {
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config:            configWithRemotes(),
 		PreselectedRemote: "files",
 	}, tui.Services{})
@@ -46,7 +46,7 @@ func TestPreselectedRemoteStartsAtDropScreen(t *testing.T) {
 	if got := model.SelectedRemote().Name; got != "files" {
 		t.Fatalf("expected files selected, got %q", got)
 	}
-	for _, want := range []string{"Name: files", "Target: deploy@files.example.com", "Destination: /var/tmp"} {
+	for _, want := range []string{"To files", "deploy@files.example.com", "Destination: /var/tmp"} {
 		if !viewContains(model.View(), want) {
 			t.Fatalf("drop screen should show selected remote detail %q:\n%s", want, model.View())
 		}
@@ -56,7 +56,7 @@ func TestPreselectedRemoteStartsAtDropScreen(t *testing.T) {
 func TestSingleRemoteStartsAtDropScreen(t *testing.T) {
 	cfg := session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}}
 
-	model := tui.NewModel(session.Start{Config: cfg}, tui.Services{})
+	model := newModel(t, session.Start{Config: cfg}, tui.Services{})
 
 	if model.State() != tui.StateDrop {
 		t.Fatalf("expected drop state, got %s", model.State())
@@ -67,7 +67,7 @@ func TestSingleRemoteStartsAtDropScreen(t *testing.T) {
 }
 
 func TestRemoteSelectionIsStickyAndCanBeChangedWithR(t *testing.T) {
-	model := tui.NewModel(session.Start{Config: configWithRemotes()}, tui.Services{})
+	model := newModel(t, session.Start{Config: configWithRemotes()}, tui.Services{})
 
 	model = update(t, model, key("down"))
 	model = update(t, model, key("enter"))
@@ -88,7 +88,7 @@ func TestRemoteSelectionIsStickyAndCanBeChangedWithR(t *testing.T) {
 
 func TestDropInputRejectsInvalidLocalFiles(t *testing.T) {
 	dir := t.TempDir()
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
@@ -97,7 +97,7 @@ func TestDropInputRejectsInvalidLocalFiles(t *testing.T) {
 		t.Fatalf("expected missing path validation:\n%s", model.View())
 	}
 
-	model = tui.NewModel(session.Start{
+	model = newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 	model = submitPath(t, model, dir)
@@ -114,7 +114,7 @@ func TestDropInputAcceptsOneRegularFileAndComputesDestination(t *testing.T) {
 	}
 	transfer := &fakeTransfer{}
 	clipboard := &fakeClipboard{}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: clipboard})
 
@@ -136,119 +136,72 @@ func TestDropInputAcceptsOneRegularFileAndComputesDestination(t *testing.T) {
 			t.Fatalf("view should display %q:\n%s", want, model.View())
 		}
 	}
-	if !viewContains(model.View(), "Sync successful. Remote path copied to clipboard. ✓") {
+	if !viewContains(model.View(), "Uploaded. Remote path copied to clipboard.") {
 		t.Fatalf("view should display clipboard success status:\n%s", model.View())
 	}
 }
 
-func TestPasswordRemotePromptsBeforeUpload(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "report.txt")
-	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+func TestPasswordPromptOccursDuringConnection(t *testing.T) {
+	connector := &fakeConnection{RequirePassword: true}
 	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
-		Config: session.Config{Remotes: []session.Remote{{
-			Name:        "files",
-			Host:        "files.example.com",
-			User:        "deploy",
-			Destination: "/uploads",
-		}}},
-	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
-
-	model = submitPath(t, model, file)
-
+	model := newModel(t, session.Start{Config: configWithRemotes(), PreselectedRemote: "files"}, tui.Services{Connector: connector, Transferer: transfer})
 	if model.State() != tui.StatePassword {
-		t.Fatalf("expected password prompt state, got %s:\n%s", model.State(), model.View())
+		t.Fatalf("expected password prompt, got %s", model.State())
 	}
 	if transfer.Events != nil {
-		t.Fatal("transfer should not start before password is submitted")
+		t.Fatal("transfer started before a file was submitted")
 	}
-	for _, want := range []string{"SSH password for deploy@files.example.com", "enter upload", "esc cancel"} {
+	for _, want := range []string{"SSH password", "deploy@files.example.com", "enter connect", "esc cancel"} {
 		if !viewContains(model.View(), want) {
-			t.Fatalf("password prompt should show %q:\n%s", want, model.View())
+			t.Fatalf("missing %q:\n%s", want, model.View())
 		}
 	}
 }
 
-func TestSubmittingPasswordStartsUploadWithoutRenderingSecret(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "report.txt")
-	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
-		Config: session.Config{Remotes: []session.Remote{{
-			Name:        "files",
-			Host:        "files.example.com",
-			User:        "deploy",
-			Destination: "/uploads",
-		}}},
-	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
-
-	model = submitPath(t, model, file)
+func TestPasswordAuthenticatesConnectionWithoutRenderingSecret(t *testing.T) {
+	connector := &fakeConnection{RequirePassword: true}
+	model := newModel(t, session.Start{Config: configWithRemotes(), PreselectedRemote: "files"}, tui.Services{Connector: connector})
 	for _, r := range "secret-pass" {
 		model = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	if strings.Contains(model.View(), "secret-pass") {
-		t.Fatalf("password prompt rendered the secret:\n%s", model.View())
+		t.Fatal("password rendered in prompt")
 	}
 	model = update(t, model, key("enter"))
-
-	if model.State() != tui.StateUpload {
-		t.Fatalf("expected upload state, got %s:\n%s", model.State(), model.View())
+	if model.State() != tui.StateDrop {
+		t.Fatalf("expected ready drop screen, got %s", model.State())
 	}
-	if transfer.Request.Password != "secret-pass" {
-		t.Fatalf("expected transfer password to be set, got %q", transfer.Request.Password)
+	if connector.Password != "secret-pass" {
+		t.Fatal("password was not sent to connector")
 	}
 	if strings.Contains(model.View(), "secret-pass") {
-		t.Fatalf("upload view rendered the secret:\n%s", model.View())
+		t.Fatal("password rendered after connecting")
 	}
 }
 
 func TestPasswordPromptKeepsSameHeightAfterTyping(t *testing.T) {
-	dir := t.TempDir()
-	file := filepath.Join(dir, "report.txt")
-	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	model := tui.NewModel(session.Start{
-		Config: session.Config{Remotes: []session.Remote{{
-			Name:        "files",
-			Host:        "files.example.com",
-			User:        "deploy",
-			Destination: "/uploads",
-		}}},
-	}, tui.Services{Transferer: &fakeTransfer{}, Clipboard: &fakeClipboard{}})
-
-	model = submitPath(t, model, file)
-	emptyView := model.View()
-	emptyHeight := visibleLineCount(emptyView)
+	model := newModel(t, session.Start{Config: configWithRemotes(), PreselectedRemote: "files"}, tui.Services{Connector: &fakeConnection{RequirePassword: true}})
+	before := visibleLineCount(model.View())
 	for _, r := range "secret-pass" {
 		model = update(t, model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	filledView := model.View()
-	filledHeight := visibleLineCount(filledView)
-
-	if filledHeight != emptyHeight {
-		t.Fatalf("password prompt height changed after typing: empty %d, filled %d\nempty:\n%s\nfilled:\n%s", emptyHeight, filledHeight, emptyView, filledView)
+	if after := visibleLineCount(model.View()); after != before {
+		t.Fatalf("password height changed: %d -> %d", before, after)
 	}
 }
 
 func TestDropScreenShowsIdleStatus(t *testing.T) {
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
-	if !strings.Contains(model.View(), "Status: idle") {
+	if !strings.Contains(model.View(), "Ready to upload") {
 		t.Fatalf("drop screen should show idle status:\n%s", model.View())
 	}
 }
 
 func TestDropInputEscapeClearsPath(t *testing.T) {
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
@@ -271,7 +224,7 @@ func TestDropInputEscapeClearsPath(t *testing.T) {
 
 func TestDropInputEscapeKeepsStatus(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.png")
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
@@ -288,7 +241,7 @@ func TestDropInputEscapeKeepsStatus(t *testing.T) {
 }
 
 func TestDropFooterShowsEscapeClearShortcut(t *testing.T) {
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
@@ -303,18 +256,18 @@ func TestUploadScreenShowsSyncingStatus(t *testing.T) {
 	if err := os.WriteFile(file, []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: &fakeTransfer{}, Clipboard: &fakeClipboard{}})
 	model = update(t, model, tea.WindowSizeMsg{Width: 240, Height: 40})
-	idleFileLine := lineIndexContaining(model.View(), "File")
+	idleFileLine := lineIndexContaining(model.View(), "Drop")
 
 	model = submitPath(t, model, file)
 
-	if !strings.Contains(model.View(), "syncing") {
+	if !strings.Contains(model.View(), "Uploading") {
 		t.Fatalf("upload screen should show syncing status:\n%s", model.View())
 	}
-	if got := lineIndexContaining(model.View(), "File"); got != idleFileLine {
+	if got := lineIndexContaining(model.View(), "Drop"); got != idleFileLine {
 		t.Fatalf("file input moved from line %d to %d while syncing:\n%s", idleFileLine, got, model.View())
 	}
 	for _, want := range []string{fmt.Sprintf("Source: %s", file), "Destination: /uploads/report.txt"} {
@@ -325,14 +278,14 @@ func TestUploadScreenShowsSyncingStatus(t *testing.T) {
 }
 
 func TestWindowSizeExpandsTUIWidth(t *testing.T) {
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/tmp"}}},
 	}, tui.Services{})
 
 	model = update(t, model, tea.WindowSizeMsg{Width: 120, Height: 40})
 
-	if got := widestLine(model.View()); got < 120 {
-		t.Fatalf("expected rendered view to use terminal width, widest line was %d:\n%s", got, model.View())
+	if got := widestLine(model.View()); got > 84 {
+		t.Fatalf("expected bounded content width, widest line was %d:\n%s", got, model.View())
 	}
 }
 
@@ -346,7 +299,7 @@ func TestDropInputAcceptsTerminalEscapedDroppedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
 
@@ -372,7 +325,7 @@ func TestClipboardFailureIsWarningNotTransferFailure(t *testing.T) {
 	}
 	transfer := &fakeTransfer{}
 	clipboard := &fakeClipboard{Err: errors.New("no clipboard")}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: clipboard})
 
@@ -396,7 +349,7 @@ func TestTransferFailureReturnsToDropAndCountsFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
 
@@ -428,7 +381,7 @@ func TestEscapeCancelsUploadAndKeepsSessionOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
 
@@ -454,7 +407,7 @@ func TestQDuringUploadRequiresConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	transfer := &fakeTransfer{}
-	model := tui.NewModel(session.Start{
+	model := newModel(t, session.Start{
 		Config: session.Config{Remotes: []session.Remote{{Name: "cb", Host: "cb", Destination: "/uploads"}}},
 	}, tui.Services{Transferer: transfer, Clipboard: &fakeClipboard{}})
 
@@ -485,10 +438,13 @@ func TestQDuringUploadRequiresConfirmation(t *testing.T) {
 
 func update(t *testing.T, model tui.Model, msg tea.Msg) tui.Model {
 	t.Helper()
-	updated, _ := model.Update(msg)
+	updated, cmd := model.Update(msg)
 	next, ok := updated.(tui.Model)
 	if !ok {
 		t.Fatalf("unexpected model type %T", updated)
+	}
+	if next.State() == tui.StateConnecting && cmd != nil {
+		return update(t, next, cmd())
 	}
 	return next
 }
@@ -593,4 +549,41 @@ type fakeClipboard struct {
 func (f *fakeClipboard) Copy(value string) error {
 	f.Copied = value
 	return f.Err
+}
+
+func newModel(t *testing.T, start session.Start, services tui.Services) tui.Model {
+	t.Helper()
+	if services.Connector == nil {
+		services.Connector = &fakeConnection{}
+	}
+	model := tui.NewModel(start, services)
+	if model.State() == tui.StateConnecting {
+		model = update(t, model, model.Init()())
+	}
+	return model
+}
+
+type fakeConnection struct {
+	RequirePassword bool
+	Password        string
+	Calls           int
+	Closed          []string
+	Err             error
+}
+
+func (f *fakeConnection) Connect(ctx context.Context, remote session.Remote, password string) (string, error) {
+	f.Calls++
+	f.Password = password
+	if f.RequirePassword && password == "" {
+		return "", session.ErrPasswordRequired
+	}
+	if f.Err != nil {
+		return "", f.Err
+	}
+	return "test-socket-" + remote.Name, nil
+}
+func (f *fakeConnection) Close(remote session.Remote, path string) {
+	if path != "" {
+		f.Closed = append(f.Closed, path)
+	}
 }

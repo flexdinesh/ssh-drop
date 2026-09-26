@@ -32,6 +32,16 @@ Clipboard copy uses the first available backend from `pbcopy`, `wl-copy`, or `xc
 
 ## Usage
 
+Choose a remote to establish an SSH connection. Key and agent authentication
+are tried automatically; if password authentication is needed, enter it in
+the masked TUI prompt. The connection stays available for repeated drops.
+
+Drop or paste one local file path, then press Enter to upload. After each
+successful upload, the remote path is copied to your clipboard and the input
+is ready for another image. The last result remains visible. Press `r` with
+an empty input to change remote, `esc` to clear or cancel, and `q` to quit.
+If the connection is lost, reconnect and retry the retained file path.
+
 ```bash
 # Start an interactive drop session and pick a configured remote.
 ssh-drop
@@ -68,7 +78,7 @@ forward_agent = true
 destination = /tmp/ssh-drop/
 
 # Or model explicit SSH fields with user/pass
-# password will be prompted in the tui
+# password will be prompted in the tui if key/agent authentication fails
 [remote.awesome]
 host = 192.168.1.79
 user = shiny
@@ -77,6 +87,22 @@ destination = /tmp/ssh-drop/
 ```
 
 Config values expand `~` and environment variables. If the config is missing, `ssh-drop` prints a sample to get you started.
+
+## Local development
+
+Use the repository's [example config](ssh-drop.example.conf):
+
+```bash
+go run ./cmd/ssh-drop --config ./ssh-drop.example.conf
+```
+
+The `local` remote requires a local SSH server. Replace the `dev` remote's
+host and user with your own remote details before connecting. Both entries
+use `/tmp/ssh-drop-dev/` as the upload directory.
+
+For a sample upload, paste `./examples/screenshot.png` into the TUI when
+running from the repository root. This image is included for development
+sessions where dragging a local screenshot is unavailable.
 
 ## Releases
 
