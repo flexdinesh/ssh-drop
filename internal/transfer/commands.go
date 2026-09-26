@@ -30,6 +30,13 @@ func (r Runner) Begin(ctx context.Context, req session.TransferRequest) <-chan s
 		if r.CommandContext == nil {
 			r.CommandContext = exec.CommandContext
 		}
+		if req.ControlPath != "" {
+			check := r.CommandContext(ctx, "ssh", "-S", req.ControlPath, "-O", "check", req.Remote.Target())
+			if err := check.Run(); err != nil {
+				events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, session.ErrConnectionLost)}
+				return
+			}
+		}
 		authEnv, cleanup, err := passwordAuthEnv(req.Password)
 		if err != nil {
 			events <- session.TransferEvent{Done: true, Err: err}
@@ -37,16 +44,28 @@ func (r Runner) Begin(ctx context.Context, req session.TransferRequest) <-chan s
 		}
 		defer cleanup()
 		if err := r.run(ctx, events, withEnv(BuildMkdirCommand(req), authEnv)); err != nil {
-			events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, err)}
+			events <- session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)}
 			return
 		}
 		if err := r.run(ctx, events, withEnv(BuildRsyncCommand(req), authEnv)); err != nil {
-			events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, err)}
+			events <- session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)}
 			return
 		}
 		events <- session.TransferEvent{Done: true}
 	}()
 	return events
+}
+
+func (r Runner) transferError(ctx context.Context, req session.TransferRequest, err error) error {
+	if ctx.Err() != nil {
+		return classifyCancel(ctx, err)
+	}
+	if req.ControlPath != "" {
+		if checkErr := r.CommandContext(ctx, "ssh", "-S", req.ControlPath, "-O", "check", req.Remote.Target()).Run(); checkErr != nil {
+			return session.ErrConnectionLost
+		}
+	}
+	return err
 }
 
 func (r Runner) run(ctx context.Context, events chan<- session.TransferEvent, command Command) error {
@@ -97,7 +116,12 @@ func passwordAuthEnv(password string) ([]string, func(), error) {
 		_ = os.RemoveAll(dir)
 	}
 	helper := filepath.Join(dir, "askpass")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$SSH_DROP_PASSWORD\"\n"
+	secret := filepath.Join(dir, "password")
+	if err := os.WriteFile(secret, []byte(password), 0o600); err != nil {
+		cleanup()
+		return nil, func() {}, fmt.Errorf("askpass password: %w", err)
+	}
+	script := "#!/bin/sh\ncat " + POSIXQuote(secret) + "\n"
 	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil {
 		cleanup()
 		return nil, func() {}, fmt.Errorf("askpass helper: %w", err)
@@ -105,7 +129,6 @@ func passwordAuthEnv(password string) ([]string, func(), error) {
 	return []string{
 		"SSH_ASKPASS=" + helper,
 		"SSH_ASKPASS_REQUIRE=force",
-		"SSH_DROP_PASSWORD=" + password,
 		"DISPLAY=ssh-drop",
 	}, cleanup, nil
 }
@@ -133,17 +156,20 @@ func classifyCancel(ctx context.Context, err error) error {
 
 func BuildMkdirCommand(req session.TransferRequest) Command {
 	args := append([]string{}, sshArgs(req.Remote)...)
+	args = append(args, controlArgs(req.ControlPath)...)
 	args = append(args, req.Remote.Target(), "mkdir -p "+quoteIfNeeded(req.DestinationDir))
 	return Command{Name: "ssh", Args: args}
 }
 
 func BuildRsyncCommand(req session.TransferRequest) Command {
 	args := []string{"--progress"}
-	if transport := sshTransport(req.Remote); transport != "ssh" {
+	if transport := sshTransport(req.Remote, req.ControlPath); transport != "ssh" {
 		args = append(args, "-e", transport)
 	}
 	args = append(args, req.LocalPath, fmt.Sprintf("%s:%s", req.Remote.Target(), quoteIfNeeded(req.DestinationPath)))
-	return Command{Name: "rsync", Args: args}
+	// Keep our explicit POSIX quoting consistent across macOS's older rsync
+	// and modern rsync, which otherwise adds a second layer of escaping.
+	return Command{Name: "rsync", Args: args, Env: []string{"RSYNC_OLD_ARGS=1", "RSYNC_PROTECT_ARGS=0"}}
 }
 
 func sshArgs(remote session.Remote) []string {
@@ -160,7 +186,7 @@ func sshArgs(remote session.Remote) []string {
 	return args
 }
 
-func sshTransport(remote session.Remote) string {
+func sshTransport(remote session.Remote, controlPath string) string {
 	args := []string{"ssh"}
 	if remote.IdentityFile != "" {
 		args = append(args, "-i", quoteIfNeeded(remote.IdentityFile))
@@ -170,6 +196,9 @@ func sshTransport(remote session.Remote) string {
 	}
 	if remote.Port != "" {
 		args = append(args, "-p", remote.Port)
+	}
+	for _, arg := range controlArgs(controlPath) {
+		args = append(args, quoteIfNeeded(arg))
 	}
 	return strings.Join(args, " ")
 }
