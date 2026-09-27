@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches:
-      - dev
       - main
   pull_request:
     branches:
@@ -44,7 +43,6 @@ jobs:
     name: GoReleaser Snapshot
     runs-on: ubuntu-latest
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,3 +63,36 @@ jobs:
           args: release --snapshot --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dev:
+    name: Publish Go dev channel
+    runs-on: ubuntu-latest
+    needs: [test, snapshot]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    concurrency:
+      group: release-dev
+      cancel-in-progress: false
+    steps:
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+
+      - name: Update dev branch
+        shell: python
+        run: |
+          import subprocess
+
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          commit = git("rev-parse", "HEAD")
+          main = git("ls-remote", "origin", "refs/heads/main").split()[0]
+          if commit != main:
+              print("Skipping superseded main commit")
+          else:
+              # dev is an install channel; replace any obsolete development history.
+              dev = git("ls-remote", "origin", "refs/heads/dev").split()
+              previous = dev[0] if dev else ""
+              git("push", f"--force-with-lease=refs/heads/dev:{previous}",
+                  "origin", f"{commit}:refs/heads/dev")
