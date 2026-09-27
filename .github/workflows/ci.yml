@@ -16,6 +16,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      SSH_DROP_REQUIRE_INTEGRATION: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +27,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Install SSH integration prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-server rsync
+          sudo mkdir -p /run/sshd
 
       - name: Test
         run: go test ./...

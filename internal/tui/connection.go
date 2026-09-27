@@ -53,6 +53,14 @@ func (o *connectionOwner) close(path string) {
 }
 
 func (m Model) shutdown() {
+	if m.cancelTransfer != nil {
+		m.cancelTransfer()
+	}
+	if m.transferEvents != nil {
+		for range m.transferEvents {
+		}
+	}
+	m.clipboard.shutdown()
 	if m.cancelConnection != nil {
 		m.cancelConnection()
 	}

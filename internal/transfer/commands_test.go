@@ -34,7 +34,7 @@ func TestAliasRemoteBuildsMkdirAndRsyncCommands(t *testing.T) {
 	if rsync.Name != "rsync" {
 		t.Fatalf("expected rsync command, got %q", rsync.Name)
 	}
-	if !reflect.DeepEqual(rsync.Args, []string{"--progress", "/Users/dee/report.txt", "cb:/tmp/report.txt"}) {
+	if !reflect.DeepEqual(rsync.Args, []string{"--progress", "--", "/Users/dee/report.txt", "cb:/tmp/report.txt"}) {
 		t.Fatalf("unexpected rsync args: %#v", rsync.Args)
 	}
 }
@@ -71,6 +71,7 @@ func TestExplicitRemoteBuildsOpenSSHOptions(t *testing.T) {
 	wantRsync := []string{
 		"--progress",
 		"-e", "ssh -i '/Users/dee/.ssh/files access' -A -p 2222",
+		"--",
 		"/Users/dee/report.txt",
 		"deploy@files.example.com:'/var/tmp/drop zone/report.txt'",
 	}

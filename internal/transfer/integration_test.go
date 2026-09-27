@@ -17,11 +17,11 @@ import (
 func TestAuthenticatedConnectionTransfersRepeatedFiles(t *testing.T) {
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
-		t.Skip("local sshd unavailable")
+		integrationUnavailable(t, "local sshd unavailable")
 	}
 	for _, name := range []string{"ssh", "ssh-keygen", "rsync"} {
 		if _, err := exec.LookPath(name); err != nil {
-			t.Skip(name + " unavailable")
+			integrationUnavailable(t, name+" unavailable")
 		}
 	}
 	current, err := user.Current()
@@ -46,7 +46,7 @@ func TestAuthenticatedConnectionTransfersRepeatedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	if output, err := exec.Command(sshd, "-t", "-f", config).CombinedOutput(); err != nil {
-		t.Skipf("local sshd prerequisites unavailable: %s", output)
+		integrationUnavailable(t, fmt.Sprintf("local sshd prerequisites unavailable: %s", output))
 	}
 	logPath := filepath.Join(dir, "sshd.log")
 	log, err := os.Create(logPath)
@@ -86,19 +86,38 @@ func TestAuthenticatedConnectionTransfersRepeatedFiles(t *testing.T) {
 		t.Fatalf("connect: %v\nsshd: %s", err, output)
 	}
 	defer connector.Close(remote, controlPath)
-	for _, name := range []string{"first image.png", "second image.png"} {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(workingDir); err != nil {
+			t.Error(err)
+		}
+	}()
+	for _, name := range []string{"first image.png", "second image.png", "--version", "a:b.png"} {
 		local := filepath.Join(dir, name)
 		if err := os.WriteFile(local, []byte(name), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		req := session.TransferRequest{LocalPath: local, Remote: remote, DestinationDir: remote.Destination, DestinationPath: filepath.Join(remote.Destination, name), ControlPath: controlPath}
+		req := session.TransferRequest{LocalPath: name, Remote: remote, DestinationDir: remote.Destination, DestinationPath: filepath.Join(remote.Destination, name), ControlPath: controlPath}
+		done := false
 		for event := range (Runner{}).Begin(ctx, req) {
 			if event.Output != "" {
 				t.Log(event.Output)
 			}
-			if event.Done && event.Err != nil {
-				t.Fatalf("upload %s: %v", name, event.Err)
+			if event.Done {
+				done = true
+				if event.Err != nil {
+					t.Fatalf("upload %s: %v", name, event.Err)
+				}
 			}
+		}
+		if !done {
+			t.Fatal("transfer ended without a terminal result")
 		}
 		data, err := os.ReadFile(req.DestinationPath)
 		if err != nil || string(data) != name {
@@ -109,4 +128,12 @@ func TestAuthenticatedConnectionTransfersRepeatedFiles(t *testing.T) {
 	if err := exec.Command("ssh", "-S", controlPath, "-O", "check", remote.Target()).Run(); err == nil {
 		t.Fatal("SSH master survived cleanup")
 	}
+}
+
+func integrationUnavailable(t *testing.T, reason string) {
+	t.Helper()
+	if os.Getenv("SSH_DROP_REQUIRE_INTEGRATION") == "1" {
+		t.Fatal(reason)
+	}
+	t.Skip(reason)
 }

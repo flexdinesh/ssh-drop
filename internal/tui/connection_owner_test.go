@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/flexdinesh/ssh-drop/internal/session"
 )
@@ -13,6 +14,60 @@ type shutdownConnection struct {
 	release chan struct{}
 	closed  chan string
 	wait    bool
+}
+
+type shutdownTransfer struct {
+	ctx     context.Context
+	release chan struct{}
+}
+
+func (s *shutdownTransfer) Begin(ctx context.Context, _ session.TransferRequest) <-chan session.TransferEvent {
+	s.ctx = ctx
+	events := make(chan session.TransferEvent)
+	go func() {
+		<-ctx.Done()
+		<-s.release
+		close(events)
+	}()
+	return events
+}
+
+func TestShutdownCancelsAndAwaitsActiveTransfer(t *testing.T) {
+	transfer := &shutdownTransfer{release: make(chan struct{})}
+	model := NewModel(session.Start{}, Services{Transferer: transfer})
+	model.startTransfer()
+	done := make(chan struct{})
+	go func() { model.shutdown(); close(done) }()
+	select {
+	case <-transfer.ctx.Done():
+	case <-time.After(time.Second):
+		close(transfer.release)
+		model.cancelTransfer()
+		t.Fatal("shutdown did not cancel active upload")
+	}
+	select {
+	case <-done:
+		close(transfer.release)
+		t.Fatal("shutdown returned before upload cleanup")
+	default:
+	}
+	close(transfer.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not await upload completion")
+	}
+}
+
+func TestClosedCanceledTransferReportsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	events := make(chan session.TransferEvent)
+	close(events)
+	msg, ok := waitForTransfer(ctx, events)().(TransferEventMsg)
+	if !ok || msg.Event.Err != session.ErrTransferCanceled {
+		t.Fatal("canceled transfer was classified as a failure")
+	}
 }
 
 func (c *shutdownConnection) Connect(ctx context.Context, _ session.Remote, _ string) (string, error) {

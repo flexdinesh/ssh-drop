@@ -4,9 +4,9 @@
 
 An OpenSSH mechanism where `ssh` asks an external helper program for a password instead of reading directly from the terminal.
 
-## Password Remote
+## Session Authentication
 
-An `ssh-drop` remote with an explicit `user` and no `identity_file`. These remotes are treated as password-auth candidates and prompt inside the TUI before upload.
+Selecting a remote establishes an SSH connection using keys or an agent first. If authentication requires a password, the TUI opens a masked prompt. Repeated uploads reuse that connection without receiving the password.
 
 ## Homebrew Tap
 

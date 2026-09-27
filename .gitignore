@@ -1,3 +1,6 @@
 bin/
 dist/
 .impeccable/review/
+.scratch/go-cache/
+.scratch/gomod/
+.scratch/ssh-drop

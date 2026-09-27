@@ -55,6 +55,7 @@ type statusKind int
 const (
 	statusIdle statusKind = iota
 	statusSyncing
+	statusCopying
 	statusSuccess
 	statusWarning
 	statusError
@@ -62,7 +63,7 @@ const (
 )
 
 type Services struct {
-	Stat       func(string) (os.FileInfo, error)
+	Lstat      func(string) (os.FileInfo, error)
 	Transferer Transferer
 	Clipboard  Clipboard
 	Connector  Connector
@@ -85,7 +86,7 @@ type Transferer interface {
 }
 
 type Clipboard interface {
-	Copy(string) error
+	Copy(context.Context, string) error
 }
 
 type TransferEventMsg struct {
@@ -105,6 +106,7 @@ type Model struct {
 	lastDestination      string
 	currentRequest       session.TransferRequest
 	transferEvents       <-chan session.TransferEvent
+	transferContext      context.Context
 	cancelTransfer       context.CancelFunc
 	uploadOutput         string
 	services             Services
@@ -120,11 +122,14 @@ type Model struct {
 	passwordAttempted    bool
 	controlRemote        session.Remote
 	connections          *connectionOwner
+	clipboard            *clipboardOwner
+	clipboardGeneration  int
+	cancelClipboard      context.CancelFunc
 }
 
 func NewModel(start session.Start, services Services) Model {
-	if services.Stat == nil {
-		services.Stat = os.Stat
+	if services.Lstat == nil {
+		services.Lstat = os.Lstat
 	}
 	if services.Transferer == nil {
 		services.Transferer = transfer.Runner{}
@@ -160,6 +165,7 @@ func NewModel(start session.Start, services Services) Model {
 		passwordInput: passwordInput,
 		services:      services,
 		connections:   &connectionOwner{connector: services.Connector, paths: make(map[string]session.Remote)},
+		clipboard:     newClipboardOwner(services.Clipboard),
 		width:         80,
 		height:        24,
 	}
@@ -184,6 +190,7 @@ func NewModel(start session.Start, services Services) Model {
 }
 
 func (m *Model) prepareConnection() {
+	m.invalidateClipboard()
 	if m.cancelConnection != nil {
 		m.cancelConnection()
 	}
@@ -313,6 +320,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConnection(msg)
 	case TransferEventMsg:
 		return m.updateTransfer(msg.Event)
+	case ClipboardMsg:
+		return m.updateClipboard(msg)
 	}
 	var cmd tea.Cmd
 	if m.state == StateDrop {
@@ -393,6 +402,7 @@ func (m Model) updateDrop(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "r":
 			if m.input.Value() == "" {
+				m.invalidateClipboard()
 				m.state = StateRemotePicker
 				m.cursor = m.selected
 				m.statusKind = statusIdle
@@ -486,9 +496,12 @@ func (m Model) updateTransfer(event session.TransferEvent) (tea.Model, tea.Cmd) 
 		}
 	}
 	if !event.Done {
-		return m, waitForTransfer(m.transferEvents)
+		return m, waitForTransfer(m.transferContext, m.transferEvents)
 	}
-	m.cancelTransfer = nil
+	if m.cancelTransfer != nil {
+		m.cancelTransfer()
+		m.cancelTransfer = nil
+	}
 	if errors.Is(event.Err, session.ErrTransferCanceled) {
 		m.summary.Canceled++
 		m.status = fmt.Sprintf("canceled upload to %s", m.currentRequest.DestinationPath)
@@ -507,14 +520,15 @@ func (m Model) updateTransfer(event session.TransferEvent) (tea.Model, tea.Cmd) 
 		m.input.SetValue("")
 		m.summary.Successes++
 		m.summary.SuccessfulDestinations = append(m.summary.SuccessfulDestinations, m.currentRequest.DestinationPath)
-		if err := m.services.Clipboard.Copy(m.currentRequest.DestinationPath); err != nil {
-			m.status = transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath) + fmt.Sprintf("\nclipboard warning: %v", err)
-			m.statusKind = statusWarning
-		} else {
-			m.status = transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath)
-			m.statusKind = statusSuccess
-		}
+		m.status = transferResultStatus(m.currentRequest.LocalPath, m.currentRequest.DestinationPath)
+		m.statusKind = statusCopying
 		m.state = StateDrop
+		copyPath := m.copyCommand()
+		if m.quitAfterCancel {
+			m.quitting = true
+			return m, func() tea.Msg { copyPath(); return tea.Quit() }
+		}
+		return m, copyPath
 	}
 	if m.quitAfterCancel {
 		m.quitting = true
@@ -535,7 +549,7 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 		m.statusKind = statusError
 		return *m, nil
 	}
-	localPath, info, err := resolveLocalPath(localPath, m.services.Stat)
+	localPath, info, err := resolveLocalPath(localPath, m.services.Lstat)
 	if err != nil {
 		if os.IsNotExist(err) {
 			m.status = fmt.Sprintf("%s does not exist", localPath)
@@ -547,6 +561,12 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 	}
 	if !info.Mode().IsRegular() {
 		m.status = fmt.Sprintf("%s is not a regular file", localPath)
+		m.statusKind = statusError
+		return *m, nil
+	}
+	localPath, err = filepath.Abs(localPath)
+	if err != nil {
+		m.status = err.Error()
 		m.statusKind = statusError
 		return *m, nil
 	}
@@ -564,14 +584,16 @@ func (m *Model) submitPath() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) startTransfer() (tea.Model, tea.Cmd) {
+	m.invalidateClipboard()
 	ctx, cancel := context.WithCancel(context.Background())
+	m.transferContext = ctx
 	m.cancelTransfer = cancel
 	m.transferEvents = m.services.Transferer.Begin(ctx, m.currentRequest)
 	m.uploadOutput = ""
 	m.status = ""
 	m.statusKind = statusSyncing
 	m.state = StateUpload
-	return *m, waitForTransfer(m.transferEvents)
+	return *m, waitForTransfer(ctx, m.transferEvents)
 }
 
 func transferResultStatus(source string, destination string) string {
@@ -668,11 +690,19 @@ func trimMatchingQuotes(input string) string {
 	return input
 }
 
-func waitForTransfer(events <-chan session.TransferEvent) tea.Cmd {
+func waitForTransfer(ctx context.Context, events <-chan session.TransferEvent) tea.Cmd {
 	return func() tea.Msg {
 		event, ok := <-events
 		if !ok {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				return TransferEventMsg{Event: session.TransferEvent{Done: true, Err: session.ErrTransferCanceled}}
+			}
 			return TransferEventMsg{Event: session.TransferEvent{Done: true, Err: errors.New("transfer ended without a result")}}
+		}
+		if event.Done {
+			// A terminal message is not proof that subprocess cleanup finished.
+			for range events {
+			}
 		}
 		return TransferEventMsg{Event: event}
 	}
