@@ -104,6 +104,15 @@ For a sample upload, paste `./examples/screenshot.png` into the TUI when
 running from the repository root. This image is included for development
 sessions where dragging a local screenshot is unavailable.
 
+Uploads accept regular files; symbolic links are rejected.
+
+Run checks with `go test ./...`, `go test -race ./...`, and `go vet ./...`.
+The SSH integration test starts its own local server, creates temporary keys
+and files, and cleans them up. It requires `sshd`, `ssh`, `ssh-keygen`, and
+`rsync`, plus the platform's SSH server prerequisites (on Linux, `/run/sshd`).
+Use `SSH_DROP_REQUIRE_INTEGRATION=1 go test ./...` to fail if those prerequisites
+are unavailable. CI and release checks require this mode.
+
 ## Releases
 
 Releases are created from `main`. See [docs/release.md](docs/release.md).

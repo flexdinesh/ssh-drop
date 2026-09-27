@@ -106,6 +106,24 @@ func TestDropInputRejectsInvalidLocalFiles(t *testing.T) {
 	}
 }
 
+func TestDropInputRejectsSymlinkToRegularFile(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "image.png")
+	if err := os.WriteFile(file, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.png")
+	if err := os.Symlink(file, link); err != nil {
+		t.Fatal(err)
+	}
+	transfer := &fakeTransfer{}
+	model := newModel(t, session.Start{Config: configWithRemotes(), PreselectedRemote: "cb"}, tui.Services{Transferer: transfer})
+	model = submitPath(t, model, link)
+	if model.State() != tui.StateDrop || transfer.Events != nil || !viewContains(model.View(), "not a regular file") {
+		t.Fatal("symlink was accepted for transfer")
+	}
+}
+
 func TestDropInputAcceptsOneRegularFileAndComputesDestination(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "report.txt")
@@ -446,19 +464,15 @@ func update(t *testing.T, model tui.Model, msg tea.Msg) tui.Model {
 	if next.State() == tui.StateConnecting && cmd != nil {
 		return update(t, next, cmd())
 	}
+	if event, ok := msg.(tui.TransferEventMsg); ok && event.Event.Done && event.Event.Err == nil && cmd != nil && !next.Quitting() {
+		return update(t, next, cmd())
+	}
 	return next
 }
 
 func drainTransfer(t *testing.T, model tui.Model, transfer *fakeTransfer, event session.TransferEvent) tui.Model {
 	t.Helper()
-	transfer.Events <- event
-	updated, cmd := model.Update(tui.TransferEventMsg{Event: event})
-	next, ok := updated.(tui.Model)
-	if !ok {
-		t.Fatalf("unexpected model type %T", updated)
-	}
-	_ = cmd
-	return next
+	return update(t, model, tui.TransferEventMsg{Event: event})
 }
 
 func submitPath(t *testing.T, model tui.Model, path string) tui.Model {
@@ -546,7 +560,7 @@ type fakeClipboard struct {
 	Err    error
 }
 
-func (f *fakeClipboard) Copy(value string) error {
+func (f *fakeClipboard) Copy(_ context.Context, value string) error {
 	f.Copied = value
 	return f.Err
 }

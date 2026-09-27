@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/flexdinesh/ssh-drop/internal/session"
 )
@@ -30,28 +30,34 @@ func (r Runner) Begin(ctx context.Context, req session.TransferRequest) <-chan s
 		if r.CommandContext == nil {
 			r.CommandContext = exec.CommandContext
 		}
+		localPath, err := filepath.Abs(req.LocalPath)
+		if err != nil {
+			sendEvent(ctx, events, session.TransferEvent{Done: true, Err: err})
+			return
+		}
+		req.LocalPath = localPath
 		if req.ControlPath != "" {
 			check := r.CommandContext(ctx, "ssh", "-S", req.ControlPath, "-O", "check", req.Remote.Target())
 			if err := check.Run(); err != nil {
-				events <- session.TransferEvent{Done: true, Err: classifyCancel(ctx, session.ErrConnectionLost)}
+				sendEvent(ctx, events, session.TransferEvent{Done: true, Err: classifyCancel(ctx, session.ErrConnectionLost)})
 				return
 			}
 		}
 		authEnv, cleanup, err := passwordAuthEnv(req.Password)
 		if err != nil {
-			events <- session.TransferEvent{Done: true, Err: err}
+			sendEvent(ctx, events, session.TransferEvent{Done: true, Err: err})
 			return
 		}
 		defer cleanup()
 		if err := r.run(ctx, events, withEnv(BuildMkdirCommand(req), authEnv)); err != nil {
-			events <- session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)}
+			sendEvent(ctx, events, session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)})
 			return
 		}
 		if err := r.run(ctx, events, withEnv(BuildRsyncCommand(req), authEnv)); err != nil {
-			events <- session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)}
+			sendEvent(ctx, events, session.TransferEvent{Done: true, Err: r.transferError(ctx, req, err)})
 			return
 		}
-		events <- session.TransferEvent{Done: true}
+		sendEvent(ctx, events, session.TransferEvent{Done: true})
 	}()
 	return events
 }
@@ -73,24 +79,11 @@ func (r Runner) run(ctx context.Context, events chan<- session.TransferEvent, co
 	if len(command.Env) > 0 {
 		cmd.Env = append(cmd.Environ(), command.Env...)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("%s stdout: %w", command.Name, err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("%s stderr: %w", command.Name, err)
-	}
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("%s start: %w", command.Name, err)
-	}
-	done := make(chan struct{})
-	go streamOutput(events, stdout, done)
-	go streamOutput(events, stderr, done)
-	err = cmd.Wait()
-	<-done
-	<-done
-	if err != nil {
+	// exec owns the readers and drains both streams before Run returns.
+	cmd.Stdout = eventWriter{ctx: ctx, events: events}
+	cmd.Stderr = eventWriter{ctx: ctx, events: events}
+	cmd.WaitDelay = 2 * time.Second
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s failed: %w", command.Name, err)
 	}
 	return nil
@@ -133,17 +126,26 @@ func passwordAuthEnv(password string) ([]string, func(), error) {
 	}, cleanup, nil
 }
 
-func streamOutput(events chan<- session.TransferEvent, reader io.Reader, done chan<- struct{}) {
-	defer func() { done <- struct{}{} }()
-	buf := make([]byte, 4096)
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
-			events <- session.TransferEvent{Output: string(buf[:n])}
-		}
-		if err != nil {
-			return
-		}
+type eventWriter struct {
+	ctx    context.Context
+	events chan<- session.TransferEvent
+}
+
+func (w eventWriter) Write(output []byte) (int, error) {
+	sendEvent(w.ctx, w.events, session.TransferEvent{Output: string(output)})
+	return len(output), nil
+}
+
+func sendEvent(ctx context.Context, events chan<- session.TransferEvent, event session.TransferEvent) {
+	// Deliver a terminal result when space remains, even after cancellation.
+	select {
+	case events <- event:
+		return
+	default:
+	}
+	select {
+	case events <- event:
+	case <-ctx.Done():
 	}
 }
 
@@ -166,7 +168,11 @@ func BuildRsyncCommand(req session.TransferRequest) Command {
 	if transport := sshTransport(req.Remote, req.ControlPath); transport != "ssh" {
 		args = append(args, "-e", transport)
 	}
-	args = append(args, req.LocalPath, fmt.Sprintf("%s:%s", req.Remote.Target(), quoteIfNeeded(req.DestinationPath)))
+	localPath := req.LocalPath
+	if !filepath.IsAbs(localPath) {
+		localPath = "./" + localPath
+	}
+	args = append(args, "--", localPath, fmt.Sprintf("%s:%s", req.Remote.Target(), quoteIfNeeded(req.DestinationPath)))
 	// Keep our explicit POSIX quoting consistent across macOS's older rsync
 	// and modern rsync, which otherwise adds a second layer of escaping.
 	return Command{Name: "rsync", Args: args, Env: []string{"RSYNC_OLD_ARGS=1", "RSYNC_PROTECT_ARGS=0"}}

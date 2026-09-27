@@ -172,9 +172,11 @@ func (m Model) renderRoute() string {
 	if m.state == StateUpload || m.state == StateConfirmQuit {
 		file, ssh = successStyle.Render("FILE ✓"), selectedStyle.Render("SSH …")
 	}
-	if (m.statusKind == statusSuccess || m.statusKind == statusWarning) && m.input.Value() == "" {
+	if (m.statusKind == statusSuccess || m.statusKind == statusWarning || m.statusKind == statusCopying) && m.input.Value() == "" {
 		file, ssh = successStyle.Render("FILE ✓"), successStyle.Render("SSH ✓")
-		if m.statusKind == statusSuccess {
+		if m.statusKind == statusCopying {
+			copyPath = selectedStyle.Render(copyLabel + " …")
+		} else if m.statusKind == statusSuccess {
 			copyPath = successStyle.Render(copyLabel + " ✓")
 		} else {
 			copyPath = warningStyle.Render(copyLabel + " !")
@@ -197,6 +199,8 @@ func (m Model) renderInput() string {
 func (m Model) renderStatus() string {
 	if m.height < 20 {
 		switch m.statusKind {
+		case statusCopying:
+			return selectedStyle.Render("Uploaded · copying path")
 		case statusSuccess:
 			return successStyle.Render("Uploaded · path copied")
 		case statusWarning:
@@ -208,6 +212,8 @@ func (m Model) renderStatus() string {
 		}
 	}
 	switch m.statusKind {
+	case statusCopying:
+		return selectedStyle.Render("Uploaded. Copying remote path…")
 	case statusSyncing:
 		return selectedStyle.Render("Uploading…")
 	case statusSuccess:
