@@ -24,14 +24,9 @@ go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@latest
 
 # Install a specific stable release.
 go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@v0.1.0
-
-# Install the development channel, updated after main passes CI.
-go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@dev
 ```
 
-Stable versions are published only by the manual **Release** workflow. Every
-push to `main` runs CI and updates the `dev` branch after checks pass, without
-creating a stable version or changing the latest GitHub Release.
+Stable versions are published only by the manual **Release** workflow.
 
 `ssh-drop` also requires `rsync` in your `PATH` for transfers. macOS includes `rsync`; install it with `brew install rsync` if your system does not provide it.
 
@@ -96,6 +91,8 @@ destination = /tmp/ssh-drop/
 Config values expand `~` and environment variables. If the config is missing, `ssh-drop` prints a sample to get you started.
 
 ## Local development
+
+See [docs/development.md](docs/development.md) for the development channel.
 
 Use the repository's [example config](ssh-drop.example.conf):
 
