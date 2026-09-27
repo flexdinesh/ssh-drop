@@ -3,6 +3,8 @@ version: 2
 project_name: ssh-drop
 
 release:
+  prerelease: false
+  make_latest: true
   replace_existing_artifacts: true
 
 before:

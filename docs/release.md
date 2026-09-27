@@ -1,6 +1,7 @@
 # Releases
 
-Releases are SemVer Git tags on `main`.
+Stable releases are SemVer Git tags on `main`. The `dev` branch is an automatic
+Go install channel for changes pushed to `main`.
 
 ## Install
 
@@ -22,12 +23,20 @@ Specific stable version:
 go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@v0.1.0
 ```
 
+Development install:
+
+```bash
+go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@dev
+```
+
 ## Current Policy
 
 Stable releases are created manually from the latest code on `main` by running
-the GitHub Actions release workflow. Each dispatch creates the next `v0.1.x`
-release. If there are no `v0.1.x` release tags yet, the first dispatch creates
-`v0.1.0`.
+the GitHub Actions **Release** workflow with `main` selected. Dispatches from
+other refs are skipped. The workflow checks out the latest `main` when it starts.
+Each new release commit gets the next `v0.1.x` release; rerunning for an already
+tagged commit reuses that tag. If there are no `v0.1.x` release tags yet, the
+first dispatch creates `v0.1.0`.
 
 Examples:
 
@@ -38,7 +47,8 @@ v0.1.2
 ```
 
 The workflow creates the tag, runs GoReleaser, publishes macOS and Linux
-archives plus checksums, and opens or updates a pull request against
+archives plus checksums, marks the stable GitHub Release as **Latest**, and
+opens or updates a pull request against
 `flexdinesh/homebrew-tap`.
 
 If GitHub Release publishing succeeds but a downstream publisher fails, rerun
@@ -48,6 +58,25 @@ GitHub Release assets before retrying the remaining publishers.
 
 Do not create a moving `latest` tag. Go already resolves `@latest` to the
 newest SemVer tag.
+
+## Development Channel
+
+Every push to `main` runs tests, builds the CLI, and validates GoReleaser snapshot
+packaging. After those checks pass, CI creates or updates `dev` to the tested
+commit. Pull requests run the same checks without publishing. Failed checks
+leave `dev` unchanged; superseded runs skip publishing so they cannot roll
+the channel backward.
+
+`dev` is maintained by CI, not used for development work. CI replaces any
+obsolete history on that branch. This replaces the old snapshot job triggered
+by pushes to `dev`; no workflow now runs on pushes to that branch.
+
+Go resolves `@dev` from the branch to a commit version (usually a pseudo-version).
+There is no `dev` tag or development GitHub Release, and this channel does not
+publish Homebrew updates. Only the manual stable workflow creates version tags
+and changes the latest GitHub Release. Go proxies may briefly cache branch
+queries; use `GOPROXY=direct go install github.com/flexdinesh/ssh-drop/cmd/ssh-drop@dev`
+to query the repository directly when checking a just-published update.
 
 ## Required Secret
 
@@ -75,7 +104,7 @@ request.
 ## Release Steps
 
 1. Merge the release-ready code to `main`.
-2. Run the **Release** workflow from GitHub Actions.
+2. Run the **Release** workflow from GitHub Actions with `main` selected.
 3. Confirm the workflow created or reused the expected `v0.1.x` tag.
 4. Review the generated GitHub Release artifacts and checksums.
 5. Merge the generated `flexdinesh/homebrew-tap` pull request after tap CI passes.

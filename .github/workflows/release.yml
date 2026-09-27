@@ -13,6 +13,7 @@ concurrency:
 jobs:
   release:
     name: Release
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       SSH_DROP_REQUIRE_INTEGRATION: "1"
