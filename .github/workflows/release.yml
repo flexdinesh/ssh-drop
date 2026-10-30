@@ -80,3 +80,47 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      # Temporary: GoReleaser skips cask upload (skip_upload) so the cask can be
+      # patched before publishing. Once
+      # https://github.com/goreleaser/goreleaser/pull/7253 ships, remove these
+      # two steps and let GoReleaser publish again. See docs/release.md,
+      # "Cask Zap Workaround".
+      - name: Patch Homebrew cask
+        run: scripts/patch-homebrew-cask.sh dist/homebrew/Casks/ssh-drop.rb
+
+      - name: Publish Homebrew cask
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          tap="flexdinesh/homebrew-tap"
+          branch="ssh-drop-${TAG}"
+          message="Update ssh-drop to ${TAG}"
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${tap}.git" tap
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse --verify --quiet "origin/${branch}" > /dev/null; then
+            git switch --create "$branch" "origin/${branch}"
+          else
+            git switch --create "$branch" origin/main
+          fi
+
+          cp ../dist/homebrew/Casks/ssh-drop.rb Casks/ssh-drop.rb
+          if ! git diff --quiet origin/main -- Casks/ssh-drop.rb; then
+            if ! git diff --quiet -- Casks/ssh-drop.rb; then
+              git commit --message "$message" -- Casks/ssh-drop.rb
+              git push origin "HEAD:refs/heads/${branch}"
+            fi
+
+            if [[ -z "$(gh pr list --repo "$tap" --head "$branch" --state open --json number --jq '.[].number')" ]]; then
+              gh pr create --repo "$tap" --base main --head "$branch" \
+                --title "$message" --body "Automated ssh-drop release cask update."
+            fi
+          fi

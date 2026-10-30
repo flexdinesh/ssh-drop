@@ -103,6 +103,7 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 		"ssh-drop requires rsync in your PATH for transfers.",
 		"Install it with `brew install rsync` if your system does not provide it.",
 		"Run `ssh-drop --help` to view available command-line options.",
+		"skip_upload: true",
 	} {
 		if !strings.Contains(config, want) {
 			t.Fatalf(".goreleaser.yaml should contain %q", want)
@@ -124,10 +125,20 @@ func TestGoReleaserPublishesHomebrewTapPullRequest(t *testing.T) {
 	for _, want := range []string{
 		"version: v2.18.0",
 		"HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
+		"scripts/patch-homebrew-cask.sh dist/homebrew/Casks/ssh-drop.rb",
+		"GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}",
+		"branch=\"ssh-drop-${TAG}\"",
+		"message=\"Update ssh-drop to ${TAG}\"",
+		"gh pr create --repo \"$tap\" --base main --head \"$branch\"",
 	} {
 		if !strings.Contains(workflow, want) {
 			t.Fatalf("release workflow should contain %q", want)
 		}
+	}
+
+	ci := readFile(t, ".github/workflows/ci.yml")
+	if !strings.Contains(ci, "scripts/patch-homebrew-cask.sh dist/homebrew/Casks/ssh-drop.rb") {
+		t.Fatalf("CI workflow should patch the snapshot Homebrew cask")
 	}
 }
 

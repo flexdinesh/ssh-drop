@@ -69,6 +69,10 @@ changelog:
 
 homebrew_casks:
   - name: ssh-drop
+    # Temporary: the release workflow patches and publishes the rendered cask.
+    # See scripts/patch-homebrew-cask.sh and
+    # https://github.com/goreleaser/goreleaser/pull/7253
+    skip_upload: true
     repository:
       owner: flexdinesh
       name: homebrew-tap

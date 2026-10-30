@@ -101,6 +101,46 @@ The tap pull request branch is deterministic per version, such as
 `ssh-drop-v0.1.0`, so rerunning a failed release updates the same tap pull
 request.
 
+### Cask Zap Workaround
+
+GoReleaser `v2.18.0` renders `# No zap stanza required` in casks without a
+`zap` stanza. Homebrew's `Cask/ZapNotRequired` cop rejects that comment, and
+`brew style` in tap CI fails every tap pull request until it is replaced with
+`zap :not_required`. GoReleaser cannot render a passing `zap` stanza today: any
+configured `zap` entries fail the tap's array style checks.
+
+Until GoReleaser ships `zap.not_required`
+([goreleaser/goreleaser#7253](https://github.com/goreleaser/goreleaser/pull/7253)):
+
+- `.goreleaser.yaml` sets `skip_upload: true` under `homebrew_casks`, so
+  GoReleaser renders `dist/homebrew/Casks/ssh-drop.rb` without publishing it.
+- `scripts/patch-homebrew-cask.sh` replaces the comment with
+  `zap :not_required`, and fails if the comment is missing. CI runs it after the
+  GoReleaser snapshot.
+- The **Publish Homebrew cask** step in `.github/workflows/release.yml` commits
+  the patched cask to the `ssh-drop-<tag>` tap branch and opens the tap pull
+  request.
+
+To revert once a GoReleaser release includes #7253:
+
+1. Bump the pinned GoReleaser `version:` in `.github/workflows/ci.yml`,
+   `.github/workflows/release.yml`, `release_config_test.go`, and this doc.
+2. In `.goreleaser.yaml`, remove `skip_upload: true` and its comment, and add
+   under `homebrew_casks`:
+
+   ```yaml
+   zap:
+     not_required: true
+   ```
+
+3. Delete `scripts/patch-homebrew-cask.sh`, the **Patch Homebrew cask** steps in
+   both workflows, and the **Publish Homebrew cask** step in `release.yml`.
+4. Remove the workaround assertions from `release_config_test.go` and this
+   section, and drop the workaround note from
+   `docs/adr/0002-homebrew-tap-releases.md`.
+5. Run `goreleaser release --snapshot --clean` and confirm
+   `dist/homebrew/Casks/ssh-drop.rb` contains `zap :not_required`.
+
 ## Release Steps
 
 1. Merge the release-ready code to `main`.
