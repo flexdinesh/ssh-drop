@@ -39,5 +39,11 @@ install checks before a cask update is merged.
 GoReleaser's generated cask dependency array does not pass tap style checks, so
 the cask does not declare `rsync` as a Homebrew dependency.
 
+GoReleaser renders a `# No zap stanza required` comment that Homebrew's
+`Cask/ZapNotRequired` cop rejects. Until GoReleaser ships `zap.not_required`
+([goreleaser/goreleaser#7253](https://github.com/goreleaser/goreleaser/pull/7253)),
+GoReleaser only renders the cask; the release workflow patches it and opens the
+tap pull request. `docs/release.md` describes how to revert this.
+
 GoReleaser's formula publisher is deprecated in newer versions, so `ssh-drop`
 uses the supported cask publisher.

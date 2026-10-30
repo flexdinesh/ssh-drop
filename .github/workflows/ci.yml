@@ -64,6 +64,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Temporary: remove with scripts/patch-homebrew-cask.sh once
+      # https://github.com/goreleaser/goreleaser/pull/7253 ships.
+      - name: Patch Homebrew cask
+        run: scripts/patch-homebrew-cask.sh dist/homebrew/Casks/ssh-drop.rb
+
   dev:
     name: Publish Go dev channel
     runs-on: ubuntu-latest
